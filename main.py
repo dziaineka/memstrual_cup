@@ -1,4 +1,5 @@
 import asyncio
+import logging
 
 from aiogram import Bot, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
@@ -6,6 +7,7 @@ from aiogram.dispatcher import Dispatcher
 from aiogram.types import ParseMode
 from aiogram.utils import executor
 from aiogram.utils.markdown import text, bold
+from vk_manager import VKM
 
 API_TOKEN = 'PUT_TOKEN_HERE'
 
@@ -16,14 +18,16 @@ bot = Bot(token=API_TOKEN, loop=loop)
 # For example use simple MemoryStorage for Dispatcher.
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
+vk = VKM()
+
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO)
 
 # States
-LOGIN = 'need_login'
-PASSWORD = 'need_password'
+TOKEN = 'need_token'
 GROUP_ID = 'need_group_id'
-TWO_FA = 'need_2FA'
 OPERATIONAL_MODE = 'operational_mode'
-AUTHORISATION = 'authorisation'
 
 
 @dp.message_handler(commands=['start'])
@@ -34,35 +38,48 @@ async def cmd_start(message: types.Message):
     # Get current state
     state = dp.current_state(chat=message.chat.id, user=message.from_user.id)
     # Update user's state
-    await state.set_state(LOGIN)
+    await state.set_state(TOKEN)
 
-    await message.reply("Вводи логин:")
+    token_link = 'https://oauth.vk.com/authorize?client_id=6601615&' +\
+                 'scope=groups,wall,offline,photos&' +\
+                 'redirect_uri=https://oauth.vk.com/blank.html&' +\
+                 'display=page&v=5.78&response_type=token'
+
+    await bot.send_message(message.chat.id, text(
+        text('Для посылания мемов в вк нужно получить токен.'),
+        text('Перейди по ссылке ' + token_link),
+        text('и скопируй из адресной строки весь текст, находящийся между'),
+        text('\"access_token=\" и \"&\".'),
+        text('В результате получится длинная строка из букв и цифр.'),
+        sep='\n'))
+
+    await bot.send_message(message.chat.id, "Введи токен:")
 
 
-@dp.message_handler(state=LOGIN)
-async def process_login(message: types.Message):
+@dp.message_handler(state=TOKEN)
+async def process_token(message: types.Message):
     """
-    Process user login
+    Process user token
     """
     # Save name to storage and go to next step
     # You can use context manager
     with dp.current_state(chat=message.chat.id,
                           user=message.from_user.id) as state:
-        await state.update_data(login=message.text)
-        await state.set_state(PASSWORD)
+        vk_token = message.text
 
-    await message.reply("Введи пароль:")
+        await state.update_data(vk_token=vk_token)
 
+        test_result, test_message = await vk.test_token(vk_token)
 
-@dp.message_handler(state=PASSWORD)
-async def process_password(message: types.Message):
-    # Update state and data
-    with dp.current_state(chat=message.chat.id,
-                          user=message.from_user.id) as state:
-        await state.update_data(password=message.text)
-        await state.set_state(GROUP_ID)
+        await bot.send_message(message.chat.id, test_message)
 
-    await message.reply("Введи ID группы:")
+        if test_result:
+            await state.set_state(GROUP_ID)
+            await bot.send_message(message.chat.id, 'Введи ID группы:')
+        else:
+            # Авторизация чето не удалась, заканчиваем разговор и удаляем все
+            # из хранилища
+            await state.finish()
 
 
 @dp.message_handler(state=GROUP_ID)
@@ -70,21 +87,25 @@ async def process_group_id(message: types.Message):
     # Update state and data
     with dp.current_state(chat=message.chat.id,
                           user=message.from_user.id) as state:
-        await state.update_data(group_id=message.text)
-        await state.set_state(AUTHORISATION)
+        group_id = message.text
 
+        await state.update_data(group_id=group_id)
         data = await state.get_data()
 
-        # And send message
-        await bot.send_message(message.chat.id, text(
-            text('login: ', data['login']),
-            text('password: ', data['password']),
-            text('group_id: ', data['group_id']),
-            sep='\n'), parse_mode=ParseMode.MARKDOWN)
+        vk_token = data['vk_token']
 
-    # Finish conversation
-    # WARNING! This method will destroy all data in storage for current user!
-    await state.finish()
+        test_result, test_message = await vk.test_group_id(group_id, vk_token)
+
+        await bot.send_message(message.chat.id, test_message)
+
+        if test_result:
+            await state.set_state(OPERATIONAL_MODE)
+            await bot.send_message(message.chat.id,
+                                   'Можно попробовать слать мемы.')
+        else:
+            # Авторизация чето не удалась, заканчиваем разговор и удаляем все
+            # из хранилища
+            await state.finish()
 
 
 async def shutdown(dispatcher: Dispatcher):
