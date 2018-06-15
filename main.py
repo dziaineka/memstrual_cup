@@ -3,6 +3,7 @@ import logging
 import traceback
 import re
 import urlmarker
+import config
 
 from aiogram import Bot, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
@@ -12,11 +13,9 @@ from aiogram.utils import executor
 from aiogram.utils.markdown import text, bold
 from vk_manager import VKM
 
-API_TOKEN = 'PUT_TOKEN_HERE'
-
 loop = asyncio.get_event_loop()
 
-bot = Bot(token=API_TOKEN, loop=loop)
+bot = Bot(token=config.API_TOKEN, loop=loop)
 
 # For example use simple MemoryStorage for Dispatcher.
 storage = MemoryStorage()
