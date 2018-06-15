@@ -1,5 +1,8 @@
 import asyncio
 import logging
+import traceback
+import re
+import urlmarker
 
 from aiogram import Bot, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
@@ -19,6 +22,7 @@ bot = Bot(token=API_TOKEN, loop=loop)
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 vk = VKM()
+url_regexp = re.compile(urlmarker.WEB_URL_REGEX)
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -46,7 +50,7 @@ async def cmd_start(message: types.Message):
                  'display=page&v=5.78&response_type=token'
 
     await bot.send_message(message.chat.id, text(
-        text('Для посылания мемов в вк нужно получить токен.'),
+        text('Для вк нужно получить токен (если его еще у тебя нет).'),
         text('Перейди по ссылке ' + token_link),
         text('и скопируй из адресной строки весь текст, находящийся между'),
         text('\"access_token=\" и \"&\".'),
@@ -106,6 +110,61 @@ async def process_group_id(message: types.Message):
             # Авторизация чето не удалась, заканчиваем разговор и удаляем все
             # из хранилища
             await state.finish()
+
+
+@dp.message_handler(state=OPERATIONAL_MODE,
+                    content_types=types.ContentType.PHOTO)
+async def process_input(message: types.Message):
+    with dp.current_state(chat=message.chat.id,
+                          user=message.from_user.id) as state:
+        data = await state.get_data()
+        group_id = data['group_id']
+        vk_token = data['vk_token']
+
+    try:
+        url, caption = await parse_message(message)
+
+        if url:
+            response = await vk.handle_url(vk_token, group_id, url, caption)
+
+            if 'post_id' in response:
+                await bot.send_message(message.chat.id,
+                                       'Запостил тебе за щеку, проверяй.')
+            else:
+                await bot.send_message(message.chat.id, response)
+
+    except Exception:
+        traceback.print_exc()
+
+
+async def parse_message(message):
+    url_base = 'https://api.telegram.org/file/bot' + API_TOKEN + '/'
+
+    if message.photo:
+        # Получаем фотку наилучшего качества(последнюю в массиве)
+        photo = message.photo[-1]
+
+        # Описание к фотке
+        caption = message['caption']
+
+        if not caption:
+            caption = ''
+
+        # url фото на сервере Telegram
+        file = await message.bot.get_file(photo['file_id'])
+        image_url = url_base + file.file_path
+
+        return image_url, caption
+    elif message.text:
+        # Если в сообщении были ссылки
+        matches = url_regexp.split(message.text)[1:]
+
+        if matches:
+            urls_with_captions = list(zip(*[matches[i::2] for i in range(2)]))
+            # TODO: handle multiple links in one message
+            return urls_with_captions[0]
+
+    return False, False
 
 
 async def shutdown(dispatcher: Dispatcher):
