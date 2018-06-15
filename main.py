@@ -137,7 +137,7 @@ async def process_input(message: types.Message):
 
 
 async def parse_message(message):
-    url_base = 'https://api.telegram.org/file/bot' + API_TOKEN + '/'
+    url_base = 'https://api.telegram.org/file/bot' + config.API_TOKEN + '/'
 
     if message.photo:
         # Получаем фотку наилучшего качества(последнюю в массиве)
