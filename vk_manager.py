@@ -92,7 +92,10 @@ class VKM:
                                                       url,
                                                       caption)
             elif extension == 'gif':
-                return self.post_gif_from_url(url, caption)
+                # постинг гифок пока что не реализован потому что в телеграме
+                # гифки в формате mp4
+                # return self.post_gif_from_url(url, caption)
+                pass
 
             return await self.post_to_wall(user_token, group_id, caption, url)
 
@@ -156,6 +159,7 @@ class VKM:
     def get_url(self, url):
         filename = tempfile.gettempdir() + '/' + url.split('/')[-1]
         filepath, headers = urllib.request.urlretrieve(url, filename)
+        headers = headers  # просто так чтобы не было предупреждения
         extension = imghdr.what(filepath)
 
         return filepath, extension
