@@ -113,7 +113,7 @@ async def process_group_id(message: types.Message):
 
 @dp.message_handler(state=OPERATIONAL_MODE,
                     content_types=types.ContentType.PHOTO)
-async def process_input(message: types.Message):
+async def process_photos(message: types.Message):
     with dp.current_state(chat=message.chat.id,
                           user=message.from_user.id) as state:
         data = await state.get_data()
@@ -121,7 +121,7 @@ async def process_input(message: types.Message):
         vk_token = data['vk_token']
 
     try:
-        url, caption = await parse_message(message)
+        url, caption = await parse_photo(message)
 
         if url:
             response = await vk.handle_url(vk_token, group_id, url, caption)
@@ -136,7 +136,32 @@ async def process_input(message: types.Message):
         traceback.print_exc()
 
 
-async def parse_message(message):
+@dp.message_handler(state=OPERATIONAL_MODE,
+                    content_types=types.ContentType.TEXT)
+async def process_text(message: types.Message):
+    with dp.current_state(chat=message.chat.id,
+                          user=message.from_user.id) as state:
+        data = await state.get_data()
+        group_id = data['group_id']
+        vk_token = data['vk_token']
+
+    try:
+        url, caption = await parse_text(message)
+
+        if url:
+            response = await vk.handle_url(vk_token, group_id, url, caption)
+
+            if 'post_id' in response:
+                await bot.send_message(message.chat.id,
+                                       'Запостил тебе за щеку, проверяй.')
+            else:
+                await bot.send_message(message.chat.id, response)
+
+    except Exception:
+        traceback.print_exc()
+
+
+async def parse_photo(message):
     url_base = 'https://api.telegram.org/file/bot' + config.API_TOKEN + '/'
 
     if message.photo:
@@ -154,7 +179,12 @@ async def parse_message(message):
         image_url = url_base + file.file_path
 
         return image_url, caption
-    elif message.text:
+
+    return False, False
+
+
+async def parse_text(message):
+    if message.text:
         # Если в сообщении были ссылки
         matches = url_regexp.split(message.text)[1:]
 
