@@ -92,7 +92,10 @@ class VKM:
                                                       url,
                                                       caption)
             elif extension == 'gif':
-                return self.post_gif_from_url(url, caption)
+                # постинг гифок пока что не реализован потому что в телеграме
+                # гифки в формате mp4
+                # return self.post_gif_from_url(url, caption)
+                pass
 
             return await self.post_to_wall(user_token, group_id, caption, url)
 
