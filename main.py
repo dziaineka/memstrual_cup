@@ -4,6 +4,7 @@ import traceback
 import re
 import urlmarker
 import config
+import states
 
 from aiogram import Bot, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
@@ -12,6 +13,12 @@ from aiogram.types import ParseMode
 from aiogram.utils import executor
 from aiogram.utils.markdown import text, bold
 from vk_manager import VKM
+from scheduler import Scheduler
+
+# TODO
+# 2 Отложенный постинг
+# 3 Постинг в несколько мест (вк и телеграм)
+# 4 Парсинг ссылок вк и доставание оттуда картинки
 
 loop = asyncio.get_event_loop()
 
@@ -21,16 +28,12 @@ bot = Bot(token=config.API_TOKEN, loop=loop)
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 vk = VKM()
+scheduler = Scheduler()
 url_regexp = re.compile(urlmarker.WEB_URL_REGEX)
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO)
-
-# States
-TOKEN = 'need_token'
-GROUP_ID = 'need_group_id'
-OPERATIONAL_MODE = 'operational_mode'
 
 
 @dp.message_handler(commands=['start'])
@@ -41,7 +44,7 @@ async def cmd_start(message: types.Message):
     # Get current state
     state = dp.current_state(chat=message.chat.id, user=message.from_user.id)
     # Update user's state
-    await state.set_state(TOKEN)
+    await state.set_state(states.TOKEN)
 
     token_link = 'https://oauth.vk.com/authorize?client_id=6601615&' +\
                  'scope=groups,wall,offline,photos&' +\
@@ -59,7 +62,7 @@ async def cmd_start(message: types.Message):
     await bot.send_message(message.chat.id, "Введи токен:")
 
 
-@dp.message_handler(state=TOKEN)
+@dp.message_handler(state=states.TOKEN)
 async def process_token(message: types.Message):
     """
     Process user token
@@ -77,7 +80,7 @@ async def process_token(message: types.Message):
         await bot.send_message(message.chat.id, test_message)
 
         if test_result:
-            await state.set_state(GROUP_ID)
+            await state.set_state(states.GROUP_ID)
             await bot.send_message(message.chat.id, 'Введи ID группы:')
         else:
             # Авторизация чето не удалась, заканчиваем разговор и удаляем все
@@ -85,7 +88,7 @@ async def process_token(message: types.Message):
             await state.finish()
 
 
-@dp.message_handler(state=GROUP_ID)
+@dp.message_handler(state=states.GROUP_ID)
 async def process_group_id(message: types.Message):
     # Update state and data
     with dp.current_state(chat=message.chat.id,
@@ -102,7 +105,7 @@ async def process_group_id(message: types.Message):
         await bot.send_message(message.chat.id, test_message)
 
         if test_result:
-            await state.set_state(OPERATIONAL_MODE)
+            await state.set_state(states.OPERATIONAL_MODE)
             await bot.send_message(message.chat.id,
                                    'Можно попробовать слать мемы.')
         else:
@@ -111,9 +114,48 @@ async def process_group_id(message: types.Message):
             await state.finish()
 
 
-@dp.message_handler(state=OPERATIONAL_MODE,
-                    content_types=types.ContentType.PHOTO)
-async def process_photos(message: types.Message):
+@dp.message_handler(state=states.DATETIME_INPUT,
+                    content_types=types.ContentType.TEXT)
+async def process_postdate(message: types.Message):
+    # Если в сообщении есть ссылка, то это очевидно новый псто, забей на старый
+    if url_regexp.split(message.text)[1:]:
+        # очистим на всякий пожарный поле для отлаживаемого поста
+        with dp.current_state(chat=message.chat.id,
+                              user=message.from_user.id) as state:
+            await state.update_data(message_to_schedule_id=None)
+
+        # и вызовем обработчик ссылок
+        await process_text(message)
+    else:
+        # если ссылки нет, то будем парсить время на куда отложить
+        seconds = message.text
+
+        # вернем рабочий режим
+        state = dp.current_state(chat=message.chat.id,
+                                 user=message.from_user.id)
+
+        await state.set_state(states.OPERATIONAL_MODE)
+        data = await state.get_data()
+        message_to_schedule_id = data['message_to_schedule_id']
+        await state.update_data(message_to_schedule_id=None)
+
+        # подождем указанное время
+        await asyncio.sleep(int(seconds))
+
+        scheduled_message = await bot.forward_message(
+            chat_id=message.chat.id,
+            from_chat_id=message.chat.id,
+            message_id=message_to_schedule_id,
+            disable_notification=True)
+
+        # вернем сообщению ID пользователя, а не бота, а то не
+        # загрузится хранилище пользователя
+        scheduled_message.from_user.id = message.from_user.id
+
+        await share_message(scheduled_message)
+
+
+async def share_message(message):
     with dp.current_state(chat=message.chat.id,
                           user=message.from_user.id) as state:
         data = await state.get_data()
@@ -123,42 +165,62 @@ async def process_photos(message: types.Message):
     try:
         url, caption = await parse_photo(message)
 
-        if url:
-            response = await vk.handle_url(vk_token, group_id, url, caption)
+        response = await post_content_from_url(vk_token,
+                                               group_id,
+                                               url,
+                                               caption)
 
-            if 'post_id' in response:
-                await bot.send_message(message.chat.id,
-                                       'Запостил тебе за щеку, проверяй.')
-            else:
-                await bot.send_message(message.chat.id, response)
+        await message.reply(response)
 
     except Exception:
         traceback.print_exc()
 
 
-@dp.message_handler(state=OPERATIONAL_MODE,
+@dp.message_handler(state=states.DATETIME_INPUT,
+                    content_types=types.ContentType.PHOTO)
+async def break_input_by_photo(message: types.Message):
+    # Get current state
+    state = dp.current_state(chat=message.chat.id, user=message.from_user.id)
+    # Update user's state
+    await state.set_state(states.OPERATIONAL_MODE)
+    await process_photos(message)
+
+
+@dp.message_handler(state=states.OPERATIONAL_MODE,
+                    content_types=types.ContentType.PHOTO)
+async def process_photos(message: types.Message):
+    try:
+        url, caption = await parse_photo(message)
+        caption = caption
+
+        if url:
+            await scheduler.schedule_post(dp, message)
+
+    except Exception:
+        traceback.print_exc()
+
+
+@dp.message_handler(state=states.OPERATIONAL_MODE,
                     content_types=types.ContentType.TEXT)
 async def process_text(message: types.Message):
-    with dp.current_state(chat=message.chat.id,
-                          user=message.from_user.id) as state:
-        data = await state.get_data()
-        group_id = data['group_id']
-        vk_token = data['vk_token']
-
     try:
         url, caption = await parse_text(message)
+        caption = caption
 
         if url:
-            response = await vk.handle_url(vk_token, group_id, url, caption)
-
-            if 'post_id' in response:
-                await bot.send_message(message.chat.id,
-                                       'Запостил тебе за щеку, проверяй.')
-            else:
-                await bot.send_message(message.chat.id, response)
+            await scheduler.schedule_post(dp, message)
 
     except Exception:
         traceback.print_exc()
+
+
+async def post_content_from_url(vk_token, group_id, url, caption=''):
+    response = await vk.handle_url(vk_token, group_id, url, caption)
+
+    if 'post_id' in response:
+        response = ('Запостил тебе за щеку, проверяй.')
+
+    return response
 
 
 async def parse_photo(message):
@@ -193,7 +255,7 @@ async def parse_text(message):
             # TODO: handle multiple links in one message
             return urls_with_captions[0]
 
-    return False, False
+    return None, None
 
 
 async def shutdown(dispatcher: Dispatcher):
