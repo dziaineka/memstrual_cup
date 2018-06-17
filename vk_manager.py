@@ -27,9 +27,6 @@ class VKM:
 
     async def request_upload_photo(self, url, data):
         resp = await self.http_session.post(url, data=data)
-
-        print(resp.status)
-        print(await resp.text())
         return await resp.json(content_type=None)
 
     async def test_token(self, token):
