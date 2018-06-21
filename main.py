@@ -5,12 +5,13 @@ import re
 import urlmarker
 import config
 import states
+import datetime
 
 from aiogram import Bot, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import Dispatcher
 from aiogram.types import ParseMode
-from aiogram.utils import executor
+from aiogram.utils import executor, exceptions
 from aiogram.utils.markdown import text, bold
 from vk_manager import VKM
 from scheduler import Scheduler
@@ -51,13 +52,26 @@ async def cmd_start(message: types.Message):
                  'redirect_uri=https://oauth.vk.com/blank.html&' +\
                  'display=page&v=5.78&response_type=token'
 
-    await bot.send_message(message.chat.id, text(
+    line2 = 'Перейди по ссылке и скопируй из адресной строки весь ' +\
+            'текст, находящийся между \"access_token=\" и \"&\".'
+
+    instructions = text(
         text('Для вк нужно получить токен (если его еще у тебя нет).'),
-        text('Перейди по ссылке ' + token_link),
-        text('и скопируй из адресной строки весь текст, находящийся между'),
-        text('\"access_token=\" и \"&\".'),
+        text(line2),
         text('В результате получится длинная строка из букв и цифр.'),
-        sep='\n'))
+        sep='\n')
+
+    # настроим клавиатуру
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+
+    url_button = types.InlineKeyboardButton(text="Получить токен",
+                                            url=token_link)
+
+    keyboard.add(url_button)
+
+    await bot.send_message(message.chat.id,
+                           instructions,
+                           reply_markup=keyboard)
 
     await bot.send_message(message.chat.id, "Введи токен:")
 
@@ -112,6 +126,47 @@ async def process_group_id(message: types.Message):
             # Авторизация чето не удалась, заканчиваем разговор и удаляем все
             # из хранилища
             await state.finish()
+
+
+@dp.callback_query_handler(state=states.DATETIME_INPUT)
+async def callback_inline(call):
+    with dp.current_state(chat=call.message.chat.id,
+                          user=call.message.from_user.id) as state:
+        if call.data == "сегодня":
+            post_date = datetime.date(datetime.datetime.now())
+            await state.update_data(post_date=post_date)
+        elif call.data == "завтра":
+            post_date = datetime.date(datetime.datetime.now())
+            await state.update_data(post_date=post_date)
+        elif call.data == "послезавтра":
+            post_date = datetime.date(datetime.datetime.now())
+            await state.update_data(post_date=post_date)
+
+    keyboard = scheduler.get_day_selection(call.data)
+
+    try:
+        await bot.edit_message_reply_markup(chat_id=call.message.chat.id,
+                                            message_id=call.message.message_id,
+                                            reply_markup=keyboard)
+
+    except exceptions.MessageNotModified:
+        keyboard = scheduler.get_day_selection()
+
+        await bot.edit_message_reply_markup(chat_id=call.message.chat.id,
+                                            message_id=call.message.message_id,
+                                            reply_markup=keyboard)
+
+
+@dp.message_handler(
+    state=states.DATETIME_INPUT,
+    func=lambda message: message.text not in ["Сегодня",
+                                              "Завтра",
+                                              "Послезавтра"])
+async def failed_process_gender(message: types.Message):
+    error_message = 'Можно выбирать только из предложенных вариантов ' +\
+                    'или ввести полностью время и дату.'
+
+    return await message.reply(error_message)
 
 
 @dp.message_handler(state=states.DATETIME_INPUT,
