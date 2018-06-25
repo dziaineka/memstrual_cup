@@ -131,7 +131,7 @@ async def process_group_id(message: types.Message):
 @dp.callback_query_handler(state=states.DATETIME_INPUT)
 async def callback_inline(call):
     with dp.current_state(chat=call.message.chat.id,
-                          user=call.message.from_user.id) as state:
+                          user=call.message.chat.id) as state:
         if call.data == "сегодня":
             post_date = datetime.date.today()
             await state.update_data(post_date=post_date)
@@ -142,19 +142,24 @@ async def callback_inline(call):
             post_date = datetime.date.today() + datetime.timedelta(days=2)
             await state.update_data(post_date=post_date)
 
-    keyboard = scheduler.get_day_selection(call.data)
+        keyboard = scheduler.get_day_selection(call.data)
 
-    try:
-        await bot.edit_message_reply_markup(chat_id=call.message.chat.id,
-                                            message_id=call.message.message_id,
-                                            reply_markup=keyboard)
+        try:
+            await bot.edit_message_reply_markup(
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                reply_markup=keyboard)
 
-    except exceptions.MessageNotModified:
-        keyboard = scheduler.get_day_selection()
+        except exceptions.MessageNotModified:
+            keyboard = scheduler.get_day_selection()
 
-        await bot.edit_message_reply_markup(chat_id=call.message.chat.id,
-                                            message_id=call.message.message_id,
-                                            reply_markup=keyboard)
+            post_date = datetime.date.today()
+            await state.update_data(post_date=post_date)
+
+            await bot.edit_message_reply_markup(
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                reply_markup=keyboard)
 
 
 @dp.message_handler(state=states.DATETIME_INPUT,
@@ -225,7 +230,7 @@ async def share_message(message):
         vk_token = data['vk_token']
 
     try:
-        url, caption = await parse_photo(message)
+        url, caption = await parse_message(message)
 
         response = await post_content_from_url(vk_token,
                                                group_id,
@@ -252,7 +257,7 @@ async def break_input_by_photo(message: types.Message):
                     content_types=types.ContentType.PHOTO)
 async def process_photos(message: types.Message):
     try:
-        url, caption = await parse_photo(message)
+        url, caption = await parse_message(message)
         caption = caption
 
         if url:
@@ -266,7 +271,7 @@ async def process_photos(message: types.Message):
                     content_types=types.ContentType.TEXT)
 async def process_text(message: types.Message):
     try:
-        url, caption = await parse_text(message)
+        url, caption = await parse_message(message)
         caption = caption
 
         if url:
@@ -285,7 +290,7 @@ async def post_content_from_url(vk_token, group_id, url, caption=''):
     return response
 
 
-async def parse_photo(message):
+async def parse_message(message):
     url_base = 'https://api.telegram.org/file/bot' + config.API_TOKEN + '/'
 
     if message.photo:
@@ -304,11 +309,7 @@ async def parse_photo(message):
 
         return image_url, caption
 
-    return False, False
-
-
-async def parse_text(message):
-    if message.text:
+    elif message.text:
         # Если в сообщении были ссылки
         matches = url_regexp.split(message.text)[1:]
 
@@ -317,7 +318,7 @@ async def parse_text(message):
             # TODO: handle multiple links in one message
             return urls_with_captions[0]
 
-    return None, None
+    return False, False
 
 
 async def shutdown(dispatcher: Dispatcher):

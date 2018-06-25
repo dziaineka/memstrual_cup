@@ -62,8 +62,11 @@ class Scheduler:
         if self.datetime_regexp.match(time_string):
             time_split = self.datetime_regexp.split(time_string)
 
-            hour = int(time_split[1])
-            minutes = int(time_split[2])
+            if time_split[1]:
+                hour = int(time_split[1])
+
+            if time_split[2]:
+                minutes = int(time_split[2])
 
             if time_split[3]:
                 day = int(time_split[3])
