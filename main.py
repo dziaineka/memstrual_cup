@@ -133,13 +133,13 @@ async def callback_inline(call):
     with dp.current_state(chat=call.message.chat.id,
                           user=call.message.from_user.id) as state:
         if call.data == "сегодня":
-            post_date = datetime.date(datetime.datetime.now())
+            post_date = datetime.date.today()
             await state.update_data(post_date=post_date)
         elif call.data == "завтра":
-            post_date = datetime.date(datetime.datetime.now())
+            post_date = datetime.date.today() + datetime.timedelta(days=1)
             await state.update_data(post_date=post_date)
         elif call.data == "послезавтра":
-            post_date = datetime.date(datetime.datetime.now())
+            post_date = datetime.date.today() + datetime.timedelta(days=2)
             await state.update_data(post_date=post_date)
 
     keyboard = scheduler.get_day_selection(call.data)
@@ -157,18 +157,6 @@ async def callback_inline(call):
                                             reply_markup=keyboard)
 
 
-@dp.message_handler(
-    state=states.DATETIME_INPUT,
-    func=lambda message: message.text not in ["Сегодня",
-                                              "Завтра",
-                                              "Послезавтра"])
-async def failed_process_gender(message: types.Message):
-    error_message = 'Можно выбирать только из предложенных вариантов ' +\
-                    'или ввести полностью время и дату.'
-
-    return await message.reply(error_message)
-
-
 @dp.message_handler(state=states.DATETIME_INPUT,
                     content_types=types.ContentType.TEXT)
 async def process_postdate(message: types.Message):
@@ -183,16 +171,35 @@ async def process_postdate(message: types.Message):
         await process_text(message)
     else:
         # если ссылки нет, то будем парсить время на куда отложить
-        seconds = message.text
-
-        # вернем рабочий режим
         state = dp.current_state(chat=message.chat.id,
                                  user=message.from_user.id)
 
-        await state.set_state(states.OPERATIONAL_MODE)
         data = await state.get_data()
+        post_date = data['post_date']
+
+        seconds = scheduler.parse_time_input(post_date, message.text)
+        if seconds < 0:
+            await bot.send_message(message.chat.id,
+                                   'Это время уже прошло, введи другое.')
+            return
+        elif seconds > 0:
+            post_time = scheduler.get_datetime_in_future(seconds)
+            time_message = '{}.{}.{} в {}:{}'.format(post_time.day,
+                                                     post_time.month,
+                                                     post_time.year,
+                                                     post_time.hour,
+                                                     post_time.minute)
+
+            post_date_message = 'Будет отправлено ' + time_message + '.'
+
+            await bot.send_message(message.chat.id,
+                                   post_date_message)
+
         message_to_schedule_id = data['message_to_schedule_id']
         await state.update_data(message_to_schedule_id=None)
+
+        # вернем рабочий режим
+        await state.set_state(states.OPERATIONAL_MODE)
 
         # подождем указанное время
         await asyncio.sleep(int(seconds))
