@@ -5,7 +5,6 @@ import re
 import urlmarker
 import config
 import states
-import datetime
 
 from aiogram import Bot, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
@@ -131,15 +130,15 @@ async def process_group_id(message: types.Message):
 @dp.callback_query_handler(state=states.DATETIME_INPUT)
 async def callback_inline(call):
     with dp.current_state(chat=call.message.chat.id,
-                          user=call.message.chat.id) as state:
+                          user=call.from_user.id) as state:
         if call.data == "сегодня":
-            post_date = datetime.date.today()
+            post_date = scheduler.get_today_date()
             await state.update_data(post_date=post_date)
         elif call.data == "завтра":
-            post_date = datetime.date.today() + datetime.timedelta(days=1)
+            post_date = scheduler.get_today_date(1)
             await state.update_data(post_date=post_date)
         elif call.data == "послезавтра":
-            post_date = datetime.date.today() + datetime.timedelta(days=2)
+            post_date = scheduler.get_today_date(2)
             await state.update_data(post_date=post_date)
 
         keyboard = scheduler.get_day_selection(call.data)
@@ -153,7 +152,7 @@ async def callback_inline(call):
         except exceptions.MessageNotModified:
             keyboard = scheduler.get_day_selection()
 
-            post_date = datetime.date.today()
+            post_date = scheduler.get_today_date()
             await state.update_data(post_date=post_date)
 
             await bot.edit_message_reply_markup(
@@ -189,13 +188,8 @@ async def process_postdate(message: types.Message):
             return
         elif seconds > 0:
             post_time = scheduler.get_datetime_in_future(seconds)
-            time_message = '{}.{}.{} в {}:{}'.format(post_time.day,
-                                                     post_time.month,
-                                                     post_time.year,
-                                                     post_time.hour,
-                                                     post_time.minute)
 
-            post_date_message = 'Будет отправлено ' + time_message + '.'
+            post_date_message = 'Будет отправлено ' + post_time + '.'
 
             await bot.send_message(message.chat.id,
                                    post_date_message)
