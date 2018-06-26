@@ -1,10 +1,11 @@
 import asyncio
-import datetime
 import states
 import regexp_datetime
 import re
+import pytz
 
 from aiogram import types
+from datetime import datetime, date, timedelta, timezone
 
 
 class Scheduler:
@@ -28,7 +29,7 @@ class Scheduler:
         # Update user's state
         await state.set_state(states.DATETIME_INPUT)
 
-        post_date = datetime.date.today()
+        post_date = self.get_today_date()
         await state.update_data(post_date=post_date)
 
         keyboard = self.get_day_selection('сегодня')
@@ -40,17 +41,31 @@ class Scheduler:
         await message.reply(text_message, reply_markup=keyboard)
 
     def get_datetime_in_future(self, seconds):
-        return (datetime.datetime.now() +
-                datetime.timedelta(seconds=seconds + 1))
+        post_time = (self.get_current_datetime() +
+                     timedelta(seconds=seconds + 1))
+
+        day = str(post_time.day).rjust(2, '0')
+        month = str(post_time.month).rjust(2, '0')
+        year = str(post_time.year).rjust(2, '0')
+        hour = str(post_time.hour).rjust(2, '0')
+        minute = str(post_time.minute).rjust(2, '0')
+
+        time_message = '{}.{}.{} в {}:{}'.format(day,
+                                                 month,
+                                                 year,
+                                                 hour,
+                                                 minute)
+
+        return time_message
 
     def secs_to_posttime(self, datetime_in_future):
-        now = datetime.datetime.now()
+        now = self.get_current_datetime()
         delta = datetime_in_future - now
 
         if delta.days < 0:
             return -delta.seconds
         else:
-            return delta.seconds
+            return ((delta.days * 24 * 60 * 60) + delta.seconds)
 
     def parse_time_input(self, post_date, time_string):
         year = int(post_date.year)
@@ -79,16 +94,26 @@ class Scheduler:
 
         # если ввели ноль и дата сегодняшняя, то постим сразу
         zero_time = hour == 0 and minutes == 0
-        if zero_time and post_date == datetime.date.today():
+        if zero_time and post_date == date.today():
             return 0
 
-        datetime_in_future = datetime.datetime(year,
-                                               month,
-                                               day,
-                                               hour,
-                                               minutes)
+        datetime_in_future = self.get_current_datetime()
+
+        datetime_in_future = datetime_in_future.replace(year=year)
+        datetime_in_future = datetime_in_future.replace(month=month)
+        datetime_in_future = datetime_in_future.replace(day=day)
+        datetime_in_future = datetime_in_future.replace(hour=hour)
+        datetime_in_future = datetime_in_future.replace(minute=minutes)
 
         return self.secs_to_posttime(datetime_in_future)
+
+    def get_today_date(self, shift_days=0):
+        tz_minsk = pytz.timezone('Europe/Minsk')
+        return datetime.now(tz_minsk).date() + timedelta(days=shift_days)
+
+    def get_current_datetime(self, shift_days=0):
+        tz_minsk = pytz.timezone('Europe/Minsk')
+        return datetime.now(tz_minsk) + timedelta(days=shift_days)
 
     def get_day_selection(self, dayType=''):
         # настроим клавиатуру
