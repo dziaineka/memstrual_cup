@@ -14,10 +14,9 @@ from aiogram.utils import executor, exceptions
 from aiogram.utils.markdown import text, bold
 from vk_manager import VKM
 from scheduler import Scheduler
+from files_opener import FilesOpener
 
 # TODO
-# 2 Отложенный постинг
-# 3 Постинг в несколько мест (вк и телеграм)
 # 4 Парсинг ссылок вк и доставание оттуда картинки
 
 loop = asyncio.get_event_loop()
@@ -44,7 +43,55 @@ async def cmd_start(message: types.Message):
     # Get current state
     state = dp.current_state(chat=message.chat.id, user=message.from_user.id)
     # Update user's state
-    await state.set_state(states.TOKEN)
+    await state.set_state(states.INITIAL)
+
+    line1 = 'Привет, этот бот автоматически постит посылаемый ему контент ' +\
+            'в заданные тобой группу ВК и канал в телеграме.'
+
+    line2 = 'Для начала нужно настроить подключение.'
+    line3 = 'Жми /vk или /channel и следуй инструкциям.'
+
+    instructions = text(text(line1), text(line2), '', text(line3), sep='\n')
+
+    await bot.send_message(message.chat.id,
+                           instructions)
+
+
+@dp.message_handler(commands=['reset'], state='*')
+async def cmd_reset(message: types.Message):
+    # Get current state
+    state = dp.current_state(chat=message.chat.id, user=message.from_user.id)
+    await state.finish()
+    await state.set_state(states.INITIAL)
+
+    await bot.send_message(message.chat.id,
+                           'Стер себе память, настраивай заново теперь.')
+
+
+@dp.message_handler(commands=['channel'],
+                    state='*')
+async def cmd_channel(message: types.Message):
+    # Get current state
+    state = dp.current_state(chat=message.chat.id, user=message.from_user.id)
+    # Update user's state
+    await state.set_state(states.CHANNEL_NAME)
+
+    line1 = 'Сперва сделай бота админом канала.'
+    line2 = 'Потом пришли мне имя канала в формате @название_канала.'
+
+    instructions = text(text(line1), text(line2), sep='\n')
+
+    await bot.send_message(message.chat.id,
+                           instructions)
+
+
+@dp.message_handler(commands=['vk'],
+                    state='*')
+async def cmd_vk(message: types.Message):
+    # Get current state
+    state = dp.current_state(chat=message.chat.id, user=message.from_user.id)
+    # Update user's state
+    await state.set_state(states.VK_TOKEN)
 
     token_link = 'https://oauth.vk.com/authorize?client_id=6601615&' +\
                  'scope=groups,wall,offline,photos&' +\
@@ -75,7 +122,30 @@ async def cmd_start(message: types.Message):
     await bot.send_message(message.chat.id, "Введи токен:")
 
 
-@dp.message_handler(state=states.TOKEN)
+@dp.message_handler(state=states.CHANNEL_NAME)
+async def process_channel(message: types.Message):
+    """
+    Process user channel name
+    """
+    # Save name to storage and go to next step
+    # You can use context manager
+    with dp.current_state(chat=message.chat.id,
+                          user=message.from_user.id) as state:
+        channel_tg = (message.text).strip()
+
+        if channel_tg[0] != '@':
+            await bot.send_message(message.chat.id, 'Нет @ в начале имени.')
+            return
+
+        await state.update_data(channel_tg=channel_tg)
+
+        await bot.send_message(message.chat.id,
+                               'Можно попробовать слать мемы.')
+
+        await state.set_state(states.OPERATIONAL_MODE)
+
+
+@dp.message_handler(state=states.VK_TOKEN)
 async def process_token(message: types.Message):
     """
     Process user token
@@ -96,9 +166,10 @@ async def process_token(message: types.Message):
             await state.set_state(states.GROUP_ID)
             await bot.send_message(message.chat.id, 'Введи ID группы:')
         else:
-            # Авторизация чето не удалась, заканчиваем разговор и удаляем все
-            # из хранилища
-            await state.finish()
+            # Авторизация чето не удалась
+            await bot.send_message(
+                message.chat.id,
+                'Авторизация чето не удалась, я хз, повтори')
 
 
 @dp.message_handler(state=states.GROUP_ID)
@@ -122,9 +193,10 @@ async def process_group_id(message: types.Message):
             await bot.send_message(message.chat.id,
                                    'Можно попробовать слать мемы.')
         else:
-            # Авторизация чето не удалась, заканчиваем разговор и удаляем все
-            # из хранилища
-            await state.finish()
+            # Авторизация чето не удалась
+            await bot.send_message(
+                message.chat.id,
+                'Авторизация чето не удалась, я хз, повтори')
 
 
 @dp.callback_query_handler(state=states.DATETIME_INPUT)
@@ -220,18 +292,31 @@ async def share_message(message):
     with dp.current_state(chat=message.chat.id,
                           user=message.from_user.id) as state:
         data = await state.get_data()
-        group_id = data['group_id']
-        vk_token = data['vk_token']
+
+        vk_token = None
+        group_id = None
+        channel_tg = None
+
+        if ('vk_token' in data) and ('group_id' in data):
+            vk_token = data['vk_token'].strip()
+            group_id = data['group_id'].strip()
+
+        if 'channel_tg' in data:
+            channel_tg = data['channel_tg'].strip()
 
     try:
         url, caption = await parse_message(message)
 
-        response = await post_content_from_url(vk_token,
-                                               group_id,
-                                               url,
-                                               caption)
+        if vk_token and group_id:
+            response = await post_from_url_to_vk(vk_token,
+                                                 group_id,
+                                                 url,
+                                                 caption)
 
-        await message.reply(response)
+            await message.reply(response)
+
+        if channel_tg:
+            response = await post_from_url_to_channel(channel_tg, url, caption)
 
     except Exception:
         traceback.print_exc()
@@ -275,11 +360,35 @@ async def process_text(message: types.Message):
         traceback.print_exc()
 
 
-async def post_content_from_url(vk_token, group_id, url, caption=''):
+@dp.message_handler(state=states.INITIAL)
+async def no_way(message: types.Message):
+    line1 = 'Пока не настроишь места для пересылки, тут будет скучновато.'
+    line2 = 'Жми /vk или /channel и следуй инструкциям.'
+
+    instructions = text(text(line1), text(line2), sep='\n')
+
+    await bot.send_message(message.chat.id,
+                           instructions)
+
+
+async def post_from_url_to_channel(channel_tg, url, caption=''):
+    # попросим вк подготовить файлы
+    filepath, extension = vk.get_url(url)
+    extension = extension
+
+    # подготавливаем и заливаем фото
+    with FilesOpener(filepath, key_format='photo') as photos_files:
+        photo = {}
+        photo = photos_files[0][1][1]  # пизда
+
+        await bot.send_photo(chat_id=channel_tg, photo=photo, caption=caption)
+
+
+async def post_from_url_to_vk(vk_token, group_id, url, caption=''):
     response = await vk.handle_url(vk_token, group_id, url, caption)
 
     if 'post_id' in response:
-        response = ('Запостил тебе за щеку, проверяй.')
+        response = ('Запостил в ВК.')
 
     return response
 
