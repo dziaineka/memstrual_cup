@@ -1,6 +1,6 @@
 import asyncio
 import states
-import regexp_datetime
+import regexps
 import re
 import pytz
 
@@ -10,7 +10,7 @@ from datetime import datetime, date, timedelta, timezone
 
 class Scheduler:
     def __init__(self):
-        self.datetime_regexp = re.compile(regexp_datetime.FULL_DATETIME)
+        self.datetime_regexp = re.compile(regexps.FULL_DATETIME)
 
     async def schedule_post(self, dispatcher, message):
         # сохраним ID поста, который нужно запланировать
