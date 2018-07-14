@@ -2,7 +2,7 @@ import asyncio
 import logging
 import traceback
 import re
-import urlmarker
+import regexps
 import config
 import states
 
@@ -28,7 +28,8 @@ storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 vk = VKM()
 scheduler = Scheduler()
-url_regexp = re.compile(urlmarker.WEB_URL_REGEX)
+url_regexp = re.compile(regexps.WEB_URL_REGEX)
+vk_wall_url = re.compile(regexps.VK_WALL_URL)
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -419,6 +420,31 @@ async def parse_message(message):
         if matches:
             urls_with_captions = list(zip(*[matches[i::2] for i in range(2)]))
             # TODO: handle multiple links in one message
+
+            # тут посмотреть не скормили ли нам ссылку на псто вк,
+            # оттуда надо утянуть картинку
+            with dp.current_state(chat=message.chat.id,
+                                  user=message.from_user.id) as state:
+                data = await state.get_data()
+
+                vk_token = None
+
+                if vk_wall_url.match(urls_with_captions[0][0]):
+                    if ('vk_token' in data):
+                        vk_token = data['vk_token'].strip()
+
+                        pic_url = await vk.check_wall_post(
+                            vk_token,
+                            urls_with_captions[0][0])
+
+                        urls_with_captions[0] = (
+                            pic_url, urls_with_captions[0][1])
+                    else:
+                        warning = 'Нужно подключиться к вк, ' +\
+                                  'чтобы забирать со стен картинки.'
+                        await bot.send_message(message.chat.id, warning)
+                        return False, False
+
             return urls_with_captions[0]
 
     return False, False

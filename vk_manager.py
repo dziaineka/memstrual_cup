@@ -3,6 +3,8 @@ import urllib
 import imghdr
 import tempfile
 import json
+import regexps
+import re
 
 from files_opener import FilesOpener
 
@@ -17,6 +19,7 @@ class VKM:
                                           "rutube.ru"]
 
         self.http_session = aiohttp.ClientSession()
+        self.vk_wall_url = re.compile(regexps.VK_WALL_URL, re.IGNORECASE)
 
     def __del__(self):
         self.http_session.close()
@@ -179,3 +182,22 @@ class VKM:
 
         response = await self.request_get(url, params)
         return json.dumps(response['response'])
+
+    async def check_wall_post(self, user_token, url):
+        url_splited = self.vk_wall_url.search(url)
+        pic_id = url_splited.group('id')
+
+        if pic_id:
+            url = 'https://api.vk.com/method/wall.getById'
+
+            params = (
+                ('posts', '-' + pic_id),
+                ('access_token', user_token),
+                ('version', '5.78'),
+            )
+
+            response = await self.request_get(url, params)
+            url = response['response'][0]['attachment']['photo']['src_big']
+            return url
+        else:
+            return url
