@@ -1,4 +1,5 @@
 import asyncio
+import aiohttp
 import logging
 import traceback
 import re
@@ -16,8 +17,6 @@ from vk_manager import VKM
 from scheduler import Scheduler
 from files_opener import FilesOpener
 
-# TODO
-# 4 Парсинг ссылок вк и доставание оттуда картинки
 
 loop = asyncio.get_event_loop()
 
@@ -375,14 +374,18 @@ async def no_way(message: types.Message):
 async def post_from_url_to_channel(channel_tg, url, caption=''):
     # попросим вк подготовить файлы
     filepath, extension = vk.get_url(url)
-    extension = extension
 
-    # подготавливаем и заливаем фото
-    with FilesOpener(filepath, key_format='photo') as photos_files:
-        photo = {}
-        photo = photos_files[0][1][1]  # пизда
+    if extension in vk.allowed_image_extensions:
+        # подготавливаем и заливаем фото
+        with FilesOpener(filepath, key_format='photo') as photos_files:
+            photo = {}
+            photo = photos_files[0][1][1]  # пизда
 
-        await bot.send_photo(chat_id=channel_tg, photo=photo, caption=caption)
+            await bot.send_photo(chat_id=channel_tg,
+                                 photo=photo,
+                                 caption=caption)
+    else:
+        await bot.send_message(channel_tg, url)
 
 
 async def post_from_url_to_vk(vk_token, group_id, url, caption=''):
@@ -450,11 +453,19 @@ async def parse_message(message):
     return False, False
 
 
+async def startup(dispatcher: Dispatcher):
+    vk.http_session = aiohttp.ClientSession()
+
+
 async def shutdown(dispatcher: Dispatcher):
     await dispatcher.storage.close()
     await dispatcher.storage.wait_closed()
+    vk.http_session.close()
 
 
 if __name__ == '__main__':
-    executor.start_polling(
-        dp, loop=loop, skip_updates=True, on_shutdown=shutdown)
+    executor.start_polling(dp,
+                           loop=loop,
+                           skip_updates=True,
+                           on_startup=startup,
+                           on_shutdown=shutdown)

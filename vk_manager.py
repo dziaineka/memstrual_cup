@@ -1,4 +1,3 @@
-import aiohttp
 import urllib
 import imghdr
 import tempfile
@@ -18,11 +17,8 @@ class VKM:
                                           "coub.com",
                                           "rutube.ru"]
 
-        self.http_session = aiohttp.ClientSession()
+        self.http_session = None
         self.vk_wall_url = re.compile(regexps.VK_WALL_URL, re.IGNORECASE)
-
-    def __del__(self):
-        self.http_session.close()
 
     async def request_get(self, url, params):
         async with self.http_session.get(url, params=params) as resp:
