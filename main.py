@@ -17,6 +17,12 @@ from vk_manager import VKM
 from scheduler import Scheduler
 from files_opener import FilesOpener
 
+# 0. Убрать исключение, если ссылка на вк некорректная https://vk.com/wall-45091870_186330
+# 1. Парсинг https://vk.com/photo-43424489_456254447
+# 2. Постинг текста
+# 3. Если прилетает сообщение с картинкой и текстом, то постить картинку и текст
+# 4. Предупреждение, что по ссылке нет фотки
+# 5. Подумать над кнопкой "отменить"
 
 loop = asyncio.get_event_loop()
 
