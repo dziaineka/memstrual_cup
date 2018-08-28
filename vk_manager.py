@@ -19,6 +19,7 @@ class VKM:
 
         self.http_session = None
         self.vk_wall_url = re.compile(regexps.VK_WALL_URL, re.IGNORECASE)
+        self.vk_photo_url = re.compile(regexps.VK_PHOTO_URL, re.IGNORECASE)
 
     async def request_get(self, url, params):
         async with self.http_session.get(url, params=params) as resp:
@@ -196,6 +197,31 @@ class VKM:
 
             try:
                 new_url = response['response'][0]['attachment']['photo']['src_big']
+            except IndexError:
+                new_url = url
+
+            return new_url
+        else:
+            return url
+
+    async def check_photo_post(self, user_token, url):
+        url_splited = self.vk_photo_url.search(url)
+        pic_id = url_splited.group('id')
+
+        if pic_id:
+            api_url = 'https://api.vk.com/method/photos.getById'
+
+            params = (
+                ('photos', '-' + pic_id),
+                ('access_token', user_token),
+                ('version', '5.78'),
+            )
+
+            response = await self.request_get(api_url, params)
+
+            try:
+                new_url = response['response'][0]['src_xxxbig']
+
             except IndexError:
                 new_url = url
 

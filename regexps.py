@@ -13,6 +13,7 @@ FULL_DATETIME = r"^\s*(1\d|2[0-3]|0?\d)" +\
                 r"([0-9]{4}|[0-9]{2})?\s*$"
 
 VK_WALL_URL = r"(?:(?:https|http):[\/\\][\/\\])?(?:www\.)?(?:vkontakte\.ru|vk\.com)[\/\\](?:wall-)(?P<id>\w+)"
+VK_PHOTO_URL = r"(?:(?:https|http):[\/\\][\/\\])?(?:www\.)?(?:vkontakte\.ru|vk\.com)[\/\\](?:photo-)(?P<id>\w+)"
 
 """
 url matching regex

@@ -17,8 +17,6 @@ from vk_manager import VKM
 from scheduler import Scheduler
 from files_opener import FilesOpener
 
-# 0. Убрать исключение, если ссылка на вк некорректная https://vk.com/wall-45091870_186330
-# 1. Парсинг https://vk.com/photo-43424489_456254447
 # 2. Постинг текста
 # 3. Если прилетает сообщение с картинкой и текстом, то постить картинку и текст
 # 4. Предупреждение, что по ссылке нет фотки
@@ -35,6 +33,7 @@ vk = VKM()
 scheduler = Scheduler()
 url_regexp = re.compile(regexps.WEB_URL_REGEX)
 vk_wall_url = re.compile(regexps.VK_WALL_URL)
+vk_photo_url = re.compile(regexps.VK_PHOTO_URL)
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -438,21 +437,26 @@ async def parse_message(message):
 
                 vk_token = None
 
+                if ('vk_token' in data):
+                    vk_token = data['vk_token'].strip()
+                else:
+                    warning = 'Нужно подключиться к вк, ' +\
+                                'чтобы забирать оттуда картинки.'
+                    await bot.send_message(message.chat.id, warning)
+                    return False, False
+
                 if vk_wall_url.match(urls_with_captions[0][0]):
-                    if ('vk_token' in data):
-                        vk_token = data['vk_token'].strip()
+                    pic_url = await vk.check_wall_post(
+                        vk_token,
+                        urls_with_captions[0][0])
 
-                        pic_url = await vk.check_wall_post(
-                            vk_token,
-                            urls_with_captions[0][0])
+                elif vk_photo_url.match(urls_with_captions[0][0]):
+                    pic_url = await vk.check_photo_post(
+                        vk_token,
+                        urls_with_captions[0][0])
 
-                        urls_with_captions[0] = (
-                            pic_url, urls_with_captions[0][1])
-                    else:
-                        warning = 'Нужно подключиться к вк, ' +\
-                                  'чтобы забирать со стен картинки.'
-                        await bot.send_message(message.chat.id, warning)
-                        return False, False
+                urls_with_captions[0] = (
+                    pic_url, urls_with_captions[0][1])
 
             return urls_with_captions[0]
 
