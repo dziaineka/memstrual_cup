@@ -184,7 +184,7 @@ class VKM:
         pic_id = url_splited.group('id')
 
         if pic_id:
-            url = 'https://api.vk.com/method/wall.getById'
+            api_url = 'https://api.vk.com/method/wall.getById'
 
             params = (
                 ('posts', '-' + pic_id),
@@ -192,8 +192,13 @@ class VKM:
                 ('version', '5.78'),
             )
 
-            response = await self.request_get(url, params)
-            url = response['response'][0]['attachment']['photo']['src_big']
-            return url
+            response = await self.request_get(api_url, params)
+
+            try:
+                new_url = response['response'][0]['attachment']['photo']['src_big']
+            except IndexError:
+                new_url = url
+
+            return new_url
         else:
             return url
