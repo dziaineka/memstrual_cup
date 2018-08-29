@@ -98,14 +98,18 @@ class VKM:
 
     async def post_image_from_url(self, user_token, group_id, url, caption=''):
             # Загружаем фотку на диск
-        filepath, extension = self.get_url(url)
+        filepath, extension = self.get_filepath(url)
 
         # Проверка расширения после скачивания
         if extension not in self.allowed_image_extensions:
-            return 'Error: {} is not an image (allowed extensions: {})'.format(
-                filepath, ','.join(self.allowed_image_extensions)
-            )
+            return await self.post_to_wall(user_token,
+                                           group_id,
+                                           caption)
         else:
+            # таким образом мы удалям ссылку из текста, если постим
+            # ее как аттачмент
+            caption = caption.replace(url, '')
+
             # Загружаем фотку на стену группы Вконтакте
             return await self.post_images(user_token,
                                           group_id,
@@ -153,9 +157,17 @@ class VKM:
         response = await self.request_get(url, params)
         return response['response']
 
-    def get_url(self, url):
+    def get_filepath(self, url):
+        if not url:
+            return '', ''
+
         filename = tempfile.gettempdir() + '/' + url.split('/')[-1]
-        filepath, headers = urllib.request.urlretrieve(url, filename)
+
+        try:
+            filepath, headers = urllib.request.urlretrieve(url, filename)
+        except Exception:
+            return '', ''
+
         headers = headers  # просто так чтобы не было предупреждения
         extension = imghdr.what(filepath)
 
@@ -165,7 +177,7 @@ class VKM:
                            user_token,
                            group_id,
                            message='',
-                           attachments=None):
+                           attachments=''):
         params = (
             ('owner_id', '-' + group_id),
             ('from_group', '1'),
