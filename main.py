@@ -454,6 +454,8 @@ async def parse_message(message):
                     pic_url = await vk.check_photo_post(
                         vk_token,
                         urls_with_captions[0][0])
+                else:
+                    return urls_with_captions[0]
 
                 urls_with_captions[0] = (
                     pic_url, urls_with_captions[0][1])
