@@ -341,11 +341,7 @@ async def break_input_by_photo(message: types.Message):
                     content_types=types.ContentType.PHOTO)
 async def process_photos(message: types.Message):
     try:
-        url, caption = await parse_message(message)
-        caption = caption
-
-        if url:
-            await scheduler.schedule_post(dp, message)
+        await scheduler.schedule_post(dp, message)
 
     except Exception:
         traceback.print_exc()
@@ -355,11 +351,7 @@ async def process_photos(message: types.Message):
                     content_types=types.ContentType.TEXT)
 async def process_text(message: types.Message):
     try:
-        url, caption = await parse_message(message)
-        caption = caption
-
-        if url:
-            await scheduler.schedule_post(dp, message)
+        await scheduler.schedule_post(dp, message)
 
     except Exception:
         traceback.print_exc()
@@ -383,7 +375,7 @@ async def to_start(message: types.Message):
 
 async def post_from_url_to_channel(channel_tg, url, caption=''):
     # попросим вк подготовить файлы
-    filepath, extension = vk.get_url(url)
+    filepath, extension = vk.get_filepath(url)
 
     if extension in vk.allowed_image_extensions:
         # подготавливаем и заливаем фото
@@ -391,11 +383,15 @@ async def post_from_url_to_channel(channel_tg, url, caption=''):
             photo = {}
             photo = photos_files[0][1][1]  # пизда
 
+            # таким образом мы удалям ссылку из текста, если постим
+            # ее как аттачмент
+            caption = caption.replace(url, '')
+
             await bot.send_photo(chat_id=channel_tg,
                                  photo=photo,
                                  caption=caption)
     else:
-        await bot.send_message(channel_tg, url)
+        await bot.send_message(channel_tg, caption)
 
 
 async def post_from_url_to_vk(vk_token, group_id, url, caption=''):
@@ -431,8 +427,8 @@ async def parse_message(message):
         matches = url_regexp.split(message.text)[1:]
 
         if matches:
-            urls_with_captions = list(zip(*[matches[i::2] for i in range(2)]))
-            # TODO: handle multiple links in one message
+            urls_with_captions = list(
+                zip(*[matches[i::2] for i in range(2)]))[0]
 
             # тут посмотреть не скормили ли нам ссылку на псто вк,
             # оттуда надо утянуть картинку
@@ -442,32 +438,39 @@ async def parse_message(message):
 
                 vk_token = None
 
+                warning = 'Нужно подключиться к вк, ' +\
+                    'чтобы забирать оттуда картинки.'
+
                 if ('vk_token' in data):
                     vk_token = data['vk_token'].strip()
-                else:
-                    warning = 'Нужно подключиться к вк, ' +\
-                                'чтобы забирать оттуда картинки.'
-                    await bot.send_message(message.chat.id, warning)
-                    return False, False
 
-                if vk_wall_url.match(urls_with_captions[0][0]):
+                if vk_wall_url.match(urls_with_captions[0]):
+                    if not vk_token:
+                        await bot.send_message(message.chat.id, warning)
+                        return urls_with_captions[0], message.text
+
                     pic_url = await vk.check_wall_post(
                         vk_token,
-                        urls_with_captions[0][0])
+                        urls_with_captions[0])
 
-                elif vk_photo_url.match(urls_with_captions[0][0]):
+                elif vk_photo_url.match(urls_with_captions[0]):
+                    if not vk_token:
+                        await bot.send_message(message.chat.id, warning)
+                        return urls_with_captions[0], message.text
+
                     pic_url = await vk.check_photo_post(
                         vk_token,
-                        urls_with_captions[0][0])
+                        urls_with_captions[0])
+
                 else:
-                    return urls_with_captions[0]
+                    return urls_with_captions[0], message.text
 
-                urls_with_captions[0] = (
-                    pic_url, urls_with_captions[0][1])
+                urls_with_captions = (
+                    pic_url, urls_with_captions[1])
 
-            return urls_with_captions[0]
+            return urls_with_captions
 
-    return False, False
+    return '', message.text
 
 
 async def startup(dispatcher: Dispatcher):
