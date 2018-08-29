@@ -376,6 +376,11 @@ async def no_way(message: types.Message):
                            instructions)
 
 
+@dp.message_handler(state=None)
+async def to_start(message: types.Message):
+    await cmd_start(message)
+
+
 async def post_from_url_to_channel(channel_tg, url, caption=''):
     # попросим вк подготовить файлы
     filepath, extension = vk.get_url(url)
