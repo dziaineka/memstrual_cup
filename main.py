@@ -17,8 +17,6 @@ from vk_manager import VKM
 from scheduler import Scheduler
 from files_opener import FilesOpener
 
-# 2. Постинг текста
-# 3. Если прилетает сообщение с картинкой и текстом, то постить картинку и текст
 # 4. Предупреждение, что по ссылке нет фотки
 # 5. Подумать над кнопкой "отменить"
 
@@ -481,6 +479,7 @@ async def shutdown(dispatcher: Dispatcher):
     await dispatcher.storage.close()
     await dispatcher.storage.wait_closed()
     vk.http_session.close()
+    print('ОООО МОЯ ОБОРОНА')
 
 
 if __name__ == '__main__':
