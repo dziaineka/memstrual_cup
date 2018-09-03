@@ -208,7 +208,8 @@ class VKM:
             response = await self.request_get(api_url, params)
 
             try:
-                new_url = response['response'][0]['attachment']['photo']['src_big']
+                new_url = \
+                    response['response'][0]['attachment']['photo']['src_big']
             except IndexError:
                 new_url = url
 
