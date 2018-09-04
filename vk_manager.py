@@ -1,16 +1,21 @@
 import urllib
-import imghdr
 import tempfile
 import json
 import regexps
 import re
 
+from os import path
 from files_opener import FilesOpener
 
 
 class VKM:
     def __init__(self):
-        self.allowed_image_extensions = ['jpeg', 'jpg', 'gif', 'png', 'gif']
+        self.allowed_image_extensions = ['.jpeg',
+                                         '.jpg',
+                                         '.gif',
+                                         '.png',
+                                         '.gif']
+
         self.supported_video_platforms = ["youtube.com",
                                           "vimeo.com",
                                           "youtu.be",
@@ -168,8 +173,7 @@ class VKM:
         except Exception:
             return '', ''
 
-        headers = headers  # просто так чтобы не было предупреждения
-        extension = imghdr.what(filepath)
+        filename, extension = path.splitext(filepath)
 
         return filepath, extension
 
