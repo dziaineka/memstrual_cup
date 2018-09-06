@@ -10,12 +10,11 @@ import states
 from aiogram import Bot, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import Dispatcher
-from aiogram.types import ParseMode
 from aiogram.utils import executor, exceptions
-from aiogram.utils.markdown import text, bold
+from aiogram.utils.markdown import text
 from vk_manager import VKM
 from scheduler import Scheduler
-from files_opener import FilesOpener
+from deliverer import Deliverer
 
 # 4. Предупреждение, что по ссылке нет фотки
 # 5. Подумать над кнопкой "отменить"
@@ -29,9 +28,9 @@ storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 vk = VKM()
 scheduler = Scheduler()
+deliverer = Deliverer.get_instance(bot, dp, vk)
+
 url_regexp = re.compile(regexps.WEB_URL_REGEX)
-vk_wall_url = re.compile(regexps.VK_WALL_URL)
-vk_photo_url = re.compile(regexps.VK_PHOTO_URL)
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -134,7 +133,7 @@ async def process_channel(message: types.Message):
     # You can use context manager
     with dp.current_state(chat=message.chat.id,
                           user=message.from_user.id) as state:
-        channel_tg = (message.text).strip()
+        channel_tg = message.text.strip()
 
         if channel_tg[0] != '@':
             await bot.send_message(message.chat.id, 'Нет @ в начале имени.')
@@ -257,72 +256,29 @@ async def process_postdate(message: types.Message):
         post_date = data['post_date']
 
         seconds = scheduler.parse_time_input(post_date, message.text)
+
         if seconds < 0:
             await bot.send_message(message.chat.id,
                                    'Это время уже прошло, введи другое.')
             return
         elif seconds > 0:
-            post_time = scheduler.get_datetime_in_future(seconds)
+            post_time = scheduler.get_str_datetime_in_future(seconds)
 
             post_date_message = 'Будет отправлено ' + post_time + '.'
 
             await bot.send_message(message.chat.id,
                                    post_date_message)
 
-        message_to_schedule_id = data['message_to_schedule_id']
+        await deliverer.append(
+            post_time=scheduler.get_datetime_in_future(seconds),
+            chat_id=message.chat.id,
+            message_id=data['message_to_schedule_id'],
+            user_id=message.from_user.id)
+
         await state.update_data(message_to_schedule_id=None)
 
         # вернем рабочий режим
         await state.set_state(states.OPERATIONAL_MODE)
-
-        # подождем указанное время
-        await asyncio.sleep(int(seconds))
-
-        scheduled_message = await bot.forward_message(
-            chat_id=message.chat.id,
-            from_chat_id=message.chat.id,
-            message_id=message_to_schedule_id,
-            disable_notification=True)
-
-        # вернем сообщению ID пользователя, а не бота, а то не
-        # загрузится хранилище пользователя
-        scheduled_message.from_user.id = message.from_user.id
-
-        await share_message(scheduled_message)
-
-
-async def share_message(message):
-    with dp.current_state(chat=message.chat.id,
-                          user=message.from_user.id) as state:
-        data = await state.get_data()
-
-        vk_token = None
-        group_id = None
-        channel_tg = None
-
-        if ('vk_token' in data) and ('group_id' in data):
-            vk_token = data['vk_token'].strip()
-            group_id = data['group_id'].strip()
-
-        if 'channel_tg' in data:
-            channel_tg = data['channel_tg'].strip()
-
-    try:
-        url, caption = await parse_message(message)
-
-        if vk_token and group_id:
-            response = await post_from_url_to_vk(vk_token,
-                                                 group_id,
-                                                 url,
-                                                 caption)
-
-            await message.reply(response)
-
-        if channel_tg:
-            response = await post_from_url_to_channel(channel_tg, url, caption)
-
-    except Exception:
-        traceback.print_exc()
 
 
 @dp.message_handler(state=states.DATETIME_INPUT,
@@ -371,106 +327,6 @@ async def to_start(message: types.Message):
     await cmd_start(message)
 
 
-async def post_from_url_to_channel(channel_tg, url, caption=''):
-    # попросим вк подготовить файлы
-    filepath, extension = vk.get_filepath(url)
-
-    if extension in vk.allowed_image_extensions:
-        # подготавливаем и заливаем фото
-        with FilesOpener(filepath, key_format='photo') as photos_files:
-            photo = {}
-            photo = photos_files[0][1][1]  # пизда
-
-            # таким образом мы удалям ссылку из текста, если постим
-            # ее как аттачмент
-            caption = caption.replace(url, '')
-
-            await bot.send_photo(chat_id=channel_tg,
-                                 photo=photo,
-                                 caption=caption)
-    else:
-        await bot.send_message(channel_tg, caption)
-
-
-async def post_from_url_to_vk(vk_token, group_id, url, caption=''):
-    response = await vk.handle_url(vk_token, group_id, url, caption)
-
-    if 'post_id' in response:
-        response = ('Запостил в ВК.')
-
-    return response
-
-
-async def parse_message(message):
-    url_base = 'https://api.telegram.org/file/bot' + config.API_TOKEN + '/'
-
-    if message.photo:
-        # Получаем фотку наилучшего качества(последнюю в массиве)
-        photo = message.photo[-1]
-
-        # Описание к фотке
-        caption = message['caption']
-
-        if not caption:
-            caption = ''
-
-        # url фото на сервере Telegram
-        file = await message.bot.get_file(photo['file_id'])
-        image_url = url_base + file.file_path
-
-        return image_url, caption
-
-    elif message.text:
-        # Если в сообщении были ссылки
-        matches = url_regexp.split(message.text)[1:]
-
-        if matches:
-            urls_with_captions = list(
-                zip(*[matches[i::2] for i in range(2)]))[0]
-
-            # тут посмотреть не скормили ли нам ссылку на псто вк,
-            # оттуда надо утянуть картинку
-            with dp.current_state(chat=message.chat.id,
-                                  user=message.from_user.id) as state:
-                data = await state.get_data()
-
-                vk_token = None
-
-                warning = 'Нужно подключиться к вк, ' +\
-                    'чтобы забирать оттуда картинки.'
-
-                if ('vk_token' in data):
-                    vk_token = data['vk_token'].strip()
-
-                if vk_wall_url.match(urls_with_captions[0]):
-                    if not vk_token:
-                        await bot.send_message(message.chat.id, warning)
-                        return urls_with_captions[0], message.text
-
-                    pic_url = await vk.check_wall_post(
-                        vk_token,
-                        urls_with_captions[0])
-
-                elif vk_photo_url.match(urls_with_captions[0]):
-                    if not vk_token:
-                        await bot.send_message(message.chat.id, warning)
-                        return urls_with_captions[0], message.text
-
-                    pic_url = await vk.check_photo_post(
-                        vk_token,
-                        urls_with_captions[0])
-
-                else:
-                    return urls_with_captions[0], message.text
-
-                urls_with_captions = (
-                    pic_url, urls_with_captions[1])
-
-            return urls_with_captions
-
-    return '', message.text
-
-
 async def startup(dispatcher: Dispatcher):
     vk.http_session = aiohttp.ClientSession()
 
@@ -478,7 +334,7 @@ async def startup(dispatcher: Dispatcher):
 async def shutdown(dispatcher: Dispatcher):
     await dispatcher.storage.close()
     await dispatcher.storage.wait_closed()
-    vk.http_session.close()
+    await vk.http_session.close()
     print('ОООО МОЯ ОБОРОНА')
 
 

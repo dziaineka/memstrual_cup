@@ -138,10 +138,9 @@ class VKM:
 
     async def upload_images_to_wall(self, user_token, group_id, paths):
         # получаем адрес сервера для заливания фото
-        params = {}
-        params['group_id'] = group_id
-        params['access_token'] = user_token
-        params['version'] = '5.78'
+        params = {'group_id': group_id,
+                  'access_token': user_token,
+                  'version': '5.78'}
 
         url = 'https://api.vk.com/method/photos.getWallUploadServer'
 
@@ -150,8 +149,7 @@ class VKM:
 
         # подготавливаем и заливаем фото
         with FilesOpener(paths, key_format='photo') as photos_files:
-            photo = {}
-            photo['photo'] = photos_files[0][1][1]  # пизда
+            photo = {'photo': photos_files[0][1][1]}
             response = await self.request_upload_photo(upload_server,
                                                        data=photo)
 
@@ -162,7 +160,8 @@ class VKM:
         response = await self.request_get(url, params)
         return response['response']
 
-    def get_filepath(self, url):
+    @staticmethod
+    def get_filepath(url):
         if not url:
             return '', ''
 
