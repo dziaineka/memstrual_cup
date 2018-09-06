@@ -1,11 +1,10 @@
-import asyncio
 import states
 import regexps
 import re
 import pytz
 
 from aiogram import types
-from datetime import datetime, date, timedelta, timezone
+from datetime import datetime, date, timedelta
 
 
 class Scheduler:
@@ -40,7 +39,7 @@ class Scheduler:
 
         await message.reply(text_message, reply_markup=keyboard)
 
-    def get_datetime_in_future(self, seconds):
+    def get_str_datetime_in_future(self, seconds):
         post_time = (self.get_current_datetime() +
                      timedelta(seconds=seconds + 1))
 
@@ -58,6 +57,12 @@ class Scheduler:
 
         return time_message
 
+    def get_datetime_in_future(self, seconds):
+        post_time = (self.get_current_datetime() +
+                     timedelta(seconds=seconds))
+
+        return post_time
+
     def secs_to_posttime(self, datetime_in_future):
         now = self.get_current_datetime()
         delta = datetime_in_future - now
@@ -65,7 +70,7 @@ class Scheduler:
         if delta.days < 0:
             return -delta.seconds
         else:
-            return ((delta.days * 24 * 60 * 60) + delta.seconds)
+            return (delta.days * 24 * 60 * 60) + delta.seconds
 
     def parse_time_input(self, post_date, time_string):
         year = int(post_date.year)
@@ -107,19 +112,22 @@ class Scheduler:
 
         return self.secs_to_posttime(datetime_in_future)
 
-    def get_today_date(self, shift_days=0):
+    @staticmethod
+    def get_today_date(shift_days=0):
         tz_minsk = pytz.timezone('Europe/Minsk')
         return datetime.now(tz_minsk).date() + timedelta(days=shift_days)
 
-    def get_current_datetime(self, shift_days=0):
+    @staticmethod
+    def get_current_datetime(shift_days=0):
         tz_minsk = pytz.timezone('Europe/Minsk')
         return datetime.now(tz_minsk) + timedelta(days=shift_days)
 
-    def get_day_selection(self, dayType=''):
+    @staticmethod
+    def get_day_selection(day_type=''):
         # настроим клавиатуру
         keyboard = types.InlineKeyboardMarkup(row_width=3)
 
-        if dayType == "сегодня":
+        if day_type == "сегодня":
             button_text = '✔️ Сегодня'
         else:
             button_text = 'Сегодня'
@@ -128,7 +136,7 @@ class Scheduler:
             text=button_text,
             callback_data="сегодня")
 
-        if dayType == "завтра":
+        if day_type == "завтра":
             button_text = '✔️ Завтра'
         else:
             button_text = 'Завтра'
@@ -137,7 +145,7 @@ class Scheduler:
             text=button_text,
             callback_data="завтра")
 
-        if dayType == "послезавтра":
+        if day_type == "послезавтра":
             button_text = '✔️ Послезавтра'
         else:
             button_text = 'Послезавтра'
