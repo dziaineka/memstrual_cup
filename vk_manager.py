@@ -44,11 +44,14 @@ class VKM:
 
         response = await self.request_get(url, params)
 
-        account_info = response['response']
-        first_name = account_info['first_name']
-        last_name = account_info['last_name']
+        try:
+            account_info = response['response']
+            first_name = account_info['first_name']
+            last_name = account_info['last_name']
 
-        greeting = 'Привет, ' + first_name + ' ' + last_name + '!'
+            greeting = 'Привет, ' + first_name + ' ' + last_name + '!'
+        except KeyError:
+            return False, response.text
 
         if first_name or last_name:
             return True, greeting
@@ -169,6 +172,7 @@ class VKM:
 
         try:
             filepath, headers = urllib.request.urlretrieve(url, filename)
+            headers = headers  # чтобы не было предупреждения
         except Exception:
             return '', ''
 
