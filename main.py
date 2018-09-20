@@ -381,6 +381,7 @@ async def to_start(message: types.Message):
 async def startup(dispatcher: Dispatcher):
     logging.info('Старт бота.')
     vk.http_session = aiohttp.ClientSession()
+    await deliverer.start_checking()
 
 
 async def shutdown(dispatcher: Dispatcher):
