@@ -8,6 +8,7 @@ import config
 import states
 
 from aiogram import Bot, types
+from aiogram.contrib.fsm_storage.redis import RedisStorage
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import Dispatcher
 from aiogram.utils import executor, exceptions
@@ -16,15 +17,20 @@ from vk_manager import VKM
 from scheduler import Scheduler
 from deliverer import Deliverer
 
-# 4. Предупреждение, что по ссылке нет фотки
-# 5. Подумать над кнопкой "отменить"
+# TODO
+# Показать очередь отправки
+# Хранилище в БД
 
 loop = asyncio.get_event_loop()
 
 bot = Bot(token=config.API_TOKEN, loop=loop)
 
-# For example use simple MemoryStorage for Dispatcher.
-storage = MemoryStorage()
+storage = RedisStorage(host=config.REDIS_HOST,
+                       port=config.REDIS_PORT,
+                       password=config.REDIS_PASSWORD)
+
+# storage = MemoryStorage()
+
 dp = Dispatcher(bot, storage=storage)
 vk = VKM()
 scheduler = Scheduler()
@@ -42,6 +48,8 @@ async def cmd_start(message: types.Message):
     """
     Conversation's entry point
     """
+    logging.info('Старт работы бота.')
+
     # Get current state
     state = dp.current_state(chat=message.chat.id, user=message.from_user.id)
     # Update user's state
@@ -62,6 +70,9 @@ async def cmd_start(message: types.Message):
 @dp.message_handler(commands=['reset'], state='*')
 async def cmd_reset(message: types.Message):
     # Get current state
+
+    logging.info('Сброс.')
+
     state = dp.current_state(chat=message.chat.id, user=message.from_user.id)
     await state.finish()
     await state.set_state(states.INITIAL)
@@ -73,6 +84,8 @@ async def cmd_reset(message: types.Message):
 @dp.message_handler(commands=['channel'],
                     state='*')
 async def cmd_channel(message: types.Message):
+    logging.info('Настраиваем канал.')
+
     # Get current state
     state = dp.current_state(chat=message.chat.id, user=message.from_user.id)
     # Update user's state
@@ -90,6 +103,8 @@ async def cmd_channel(message: types.Message):
 @dp.message_handler(commands=['vk'],
                     state='*')
 async def cmd_vk(message: types.Message):
+    logging.info('Настраиваем ВК.')
+
     # Get current state
     state = dp.current_state(chat=message.chat.id, user=message.from_user.id)
     # Update user's state
@@ -129,6 +144,8 @@ async def process_channel(message: types.Message):
     """
     Process user channel name
     """
+    logging.info('Обрабатываем ввод имени канала.')
+
     # Save name to storage and go to next step
     # You can use context manager
     with dp.current_state(chat=message.chat.id,
@@ -139,7 +156,9 @@ async def process_channel(message: types.Message):
             await bot.send_message(message.chat.id, 'Нет @ в начале имени.')
             return
 
-        await state.update_data(channel_tg=channel_tg)
+        data = await state.get_data()
+        data['channel_tg'] = channel_tg
+        await state.update_data(data=data, channel_tg=channel_tg)
 
         await bot.send_message(message.chat.id,
                                'Можно попробовать слать мемы.')
@@ -152,13 +171,17 @@ async def process_token(message: types.Message):
     """
     Process user token
     """
+    logging.info('Обрабатываем ввод токена ВК.')
+
     # Save name to storage and go to next step
     # You can use context manager
     with dp.current_state(chat=message.chat.id,
                           user=message.from_user.id) as state:
         vk_token = message.text
 
-        await state.update_data(vk_token=vk_token)
+        data = await state.get_data()
+        data['vk_token'] = vk_token
+        await state.update_data(data=data, vk_token=vk_token)
 
         test_result, test_message = await vk.test_token(vk_token)
 
@@ -176,12 +199,17 @@ async def process_token(message: types.Message):
 
 @dp.message_handler(state=states.GROUP_ID)
 async def process_group_id(message: types.Message):
+    logging.info('Обрабатываем ввод ИД группы ВК.')
+
     # Update state and data
     with dp.current_state(chat=message.chat.id,
                           user=message.from_user.id) as state:
         group_id = message.text
 
-        await state.update_data(group_id=group_id)
+        data = await state.get_data()
+        data['group_id'] = group_id
+        await state.update_data(data=data, group_id=group_id)
+
         data = await state.get_data()
 
         vk_token = data['vk_token']
@@ -203,17 +231,21 @@ async def process_group_id(message: types.Message):
 
 @dp.callback_query_handler(state=states.DATETIME_INPUT)
 async def callback_inline(call):
+    logging.info('Обрабатываем нажатие кнопки дня публикации.')
+
     with dp.current_state(chat=call.message.chat.id,
                           user=call.from_user.id) as state:
         if call.data == "сегодня":
             post_date = scheduler.get_today_date()
-            await state.update_data(post_date=post_date)
         elif call.data == "завтра":
             post_date = scheduler.get_today_date(1)
-            await state.update_data(post_date=post_date)
         elif call.data == "послезавтра":
             post_date = scheduler.get_today_date(2)
-            await state.update_data(post_date=post_date)
+
+        data = await state.get_data()
+        post_date = scheduler.date_to_str(post_date)
+        data['post_date'] = post_date
+        await state.update_data(data=data, post_date=post_date)
 
         keyboard = scheduler.get_day_selection(call.data)
 
@@ -227,7 +259,11 @@ async def callback_inline(call):
             keyboard = scheduler.get_day_selection()
 
             post_date = scheduler.get_today_date()
-            await state.update_data(post_date=post_date)
+
+            data = await state.get_data()
+            post_date = scheduler.date_to_str(post_date)
+            data['post_date'] = post_date
+            await state.update_data(data=data, post_date=post_date)
 
             await bot.edit_message_reply_markup(
                 chat_id=call.message.chat.id,
@@ -238,12 +274,17 @@ async def callback_inline(call):
 @dp.message_handler(state=states.DATETIME_INPUT,
                     content_types=types.ContentType.TEXT)
 async def process_postdate(message: types.Message):
+    logging.info('Обрабатываем ввод времени публикации (или сброс ввода).')
+
     # Если в сообщении есть ссылка, то это очевидно новый псто, забей на старый
     if url_regexp.split(message.text)[1:]:
         # очистим на всякий пожарный поле для отлаживаемого поста
         with dp.current_state(chat=message.chat.id,
                               user=message.from_user.id) as state:
-            await state.update_data(message_to_schedule_id=None)
+
+            data = await state.get_data()
+            data['message_to_schedule_id'] = None
+            await state.update_data(data=data, message_to_schedule_id=None)
 
         # и вызовем обработчик ссылок
         await process_text(message)
@@ -253,8 +294,7 @@ async def process_postdate(message: types.Message):
                                  user=message.from_user.id)
 
         data = await state.get_data()
-        post_date = data['post_date']
-
+        post_date = scheduler.str_to_date(data['post_date'])
         seconds = scheduler.parse_time_input(post_date, message.text)
 
         if seconds < 0:
@@ -275,7 +315,9 @@ async def process_postdate(message: types.Message):
             message_id=data['message_to_schedule_id'],
             user_id=message.from_user.id)
 
-        await state.update_data(message_to_schedule_id=None)
+        data = await state.get_data()
+        data['message_to_schedule_id'] = None
+        await state.update_data(data=data, message_to_schedule_id=None)
 
         # вернем рабочий режим
         await state.set_state(states.OPERATIONAL_MODE)
@@ -284,6 +326,8 @@ async def process_postdate(message: types.Message):
 @dp.message_handler(state=states.DATETIME_INPUT,
                     content_types=types.ContentType.PHOTO)
 async def break_input_by_photo(message: types.Message):
+    logging.info('Обрабатываем сброс ввода времени через новую картинку.')
+
     # Get current state
     state = dp.current_state(chat=message.chat.id, user=message.from_user.id)
     # Update user's state
@@ -294,6 +338,8 @@ async def break_input_by_photo(message: types.Message):
 @dp.message_handler(state=states.OPERATIONAL_MODE,
                     content_types=types.ContentType.PHOTO)
 async def process_photos(message: types.Message):
+    logging.info('Обрабатываем посылку картинки.')
+
     try:
         await scheduler.schedule_post(dp, message)
 
@@ -304,6 +350,8 @@ async def process_photos(message: types.Message):
 @dp.message_handler(state=states.OPERATIONAL_MODE,
                     content_types=types.ContentType.TEXT)
 async def process_text(message: types.Message):
+    logging.info('Обрабатываем посылку текста.')
+
     try:
         await scheduler.schedule_post(dp, message)
 
@@ -313,6 +361,8 @@ async def process_text(message: types.Message):
 
 @dp.message_handler(state=states.INITIAL)
 async def no_way(message: types.Message):
+    logging.info('Обработка ввода при ненастроенных получателях.')
+
     line1 = 'Пока не настроишь места для пересылки, тут будет скучновато.'
     line2 = 'Жми /vk или /channel и следуй инструкциям.'
 
@@ -324,18 +374,21 @@ async def no_way(message: types.Message):
 
 @dp.message_handler(state=None)
 async def to_start(message: types.Message):
+    logging.info('При вводе любого сообщения стартуем.')
     await cmd_start(message)
 
 
 async def startup(dispatcher: Dispatcher):
+    logging.info('Старт бота.')
     vk.http_session = aiohttp.ClientSession()
 
 
 async def shutdown(dispatcher: Dispatcher):
+    logging.info('Убиваем бота.')
+
     await dispatcher.storage.close()
     await dispatcher.storage.wait_closed()
     await vk.http_session.close()
-    print('ОООО МОЯ ОБОРОНА')
 
 
 if __name__ == '__main__':

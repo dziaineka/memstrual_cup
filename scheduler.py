@@ -15,7 +15,11 @@ class Scheduler:
         # сохраним ID поста, который нужно запланировать
         with dispatcher.current_state(chat=message.chat.id,
                                       user=message.from_user.id) as state:
-            await state.update_data(message_to_schedule_id=message.message_id)
+
+            data = await state.get_data()
+            data['message_to_schedule_id'] = message.message_id
+            await state.update_data(data=data,
+                                    message_to_schedule_id=message.message_id)
 
         # пользователь вводит время
         await self.input_time_to_post(dispatcher, message)
@@ -28,8 +32,12 @@ class Scheduler:
         # Update user's state
         await state.set_state(states.DATETIME_INPUT)
 
-        post_date = self.get_today_date()
-        await state.update_data(post_date=post_date)
+        post_date = self.date_to_str(self.get_today_date())
+
+        data = await state.get_data()
+
+        data['post_date'] = post_date
+        await state.update_data(data=data, post_date=post_date)
 
         keyboard = self.get_day_selection('сегодня')
 
@@ -111,6 +119,47 @@ class Scheduler:
         datetime_in_future = datetime_in_future.replace(minute=minutes)
 
         return self.secs_to_posttime(datetime_in_future)
+
+    @staticmethod
+    def datetime_to_str(dtime):
+        year = int(dtime.year)
+        month = int(dtime.month)
+        day = int(dtime.day)
+        hour = int(dtime.hour)
+        minute = int(dtime.minute)
+        second = int(dtime.second)
+
+        return (str(year) + '/' + str(month) + '/' + str(day) + '/' +
+                str(hour) + '/' + str(minute) + '/' + str(second))
+
+    @staticmethod
+    def str_to_datetime(str_datetime):
+        datestr = str_datetime.split('/')
+
+        dtime = Scheduler.get_current_datetime()
+
+        dtime = dtime.replace(year=int(datestr[0]))
+        dtime = dtime.replace(month=int(datestr[1]))
+        dtime = dtime.replace(day=int(datestr[2]))
+        dtime = dtime.replace(hour=int(datestr[3]))
+        dtime = dtime.replace(minute=int(datestr[4]))
+        dtime = dtime.replace(second=int(datestr[5]))
+
+        return dtime
+
+    @staticmethod
+    def date_to_str(date):
+        year = int(date.year)
+        month = int(date.month)
+        day = int(date.day)
+
+        return str(year) + '/' + str(month) + '/' + str(day)
+
+    @staticmethod
+    def str_to_date(str_date):
+        datestr = str_date.split('/')
+        return datetime.strptime(datestr[0] + datestr[1] + datestr[2],
+                                 "%Y%m%d").date()
 
     @staticmethod
     def get_today_date(shift_days=0):

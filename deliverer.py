@@ -1,11 +1,16 @@
 import asyncio
-import config
 import re
-import regexps
+import logging
 import traceback
+import config
+import regexps
 
 from scheduler import Scheduler
 from files_opener import FilesOpener
+
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO)
 
 
 class Deliverer:
@@ -15,7 +20,9 @@ class Deliverer:
         self._bot = bot
         self._dp = dp
         self._vk = vk
-        self._post_queue = []
+
+        self._post_queue = self._dp.current_state(chat=1, user=1)
+
         self.__checking_running = False
 
         self.STATUS_OK = 0
@@ -28,6 +35,8 @@ class Deliverer:
 
     @staticmethod
     def get_instance(bot, dp, vk):
+        logging.info('Получаем доставщика постов.')
+
         if Deliverer.__instance is None:
             Deliverer.__instance = Deliverer(bot, dp, vk)
 
@@ -35,8 +44,9 @@ class Deliverer:
 
     @staticmethod
     def sort_by_nearest_time(post):
-        return (post['post_time'] - Scheduler.get_current_datetime()).\
-            total_seconds()
+        dtime = Scheduler.str_to_datetime(post['post_time'])
+
+        return (dtime - Scheduler.get_current_datetime()).total_seconds()
 
     async def append(self,
                      post_time,
@@ -44,30 +54,62 @@ class Deliverer:
                      message_id,
                      user_id,
                      silent=False):
+        logging.info('Добавляем пост в очередь.')
+
+        post_time = Scheduler.datetime_to_str(post_time)
+
         post = {'post_time': post_time,
                 'chat_id': chat_id,
                 'message_id': message_id,
                 'user_id': user_id}
 
-        self._post_queue.append(post)
-        self._post_queue.sort(key=self.sort_by_nearest_time)
-        self._post_queue.reverse()
+        queue = await self._post_queue.get_data()
+
+        try:
+            queue = queue['post_queue']
+        except KeyError:
+            queue = []
+
+        queue.append(post)
+        queue.sort(key=self.sort_by_nearest_time)
+        queue.reverse()
+
+        await self._post_queue.set_data({'post_queue': queue})
 
         if not silent:
             await self.start_checking()
+
+    async def pop(self):
+        logging.info('Достаем пост из очереди.')
+
+        queue = await self._post_queue.get_data()
+
+        try:
+            queue = queue['post_queue']
+        except KeyError:
+            queue = []
+
+        post = queue.pop()
+
+        await self._post_queue.set_data({'post_queue': queue})
+
+        return post
 
     @staticmethod
     def its_time_to_post(cur_time, post_time):
         return cur_time >= post_time
 
     async def check_queue(self):
+        logging.info('Проверяем очередь, мб уже есть что постить.')
+
         try:
-            nearest_post = self._post_queue.pop()
+            nearest_post = await self.pop()
+            post_dtime = Scheduler.str_to_datetime(nearest_post['post_time'])
         except IndexError:
             return self.STATUS_EMPTY
 
         if self.its_time_to_post(Scheduler.get_current_datetime(),
-                                 nearest_post['post_time']):
+                                 post_dtime):
             scheduled_message = await self._bot.forward_message(
                 chat_id=nearest_post['chat_id'],
                 from_chat_id=nearest_post['chat_id'],
@@ -82,7 +124,7 @@ class Deliverer:
 
             return self.STATUS_OK
         else:
-            await self.append(nearest_post['post_time'],
+            await self.append(post_dtime,
                               nearest_post['chat_id'],
                               nearest_post['message_id'],
                               nearest_post['user_id'],
@@ -91,6 +133,8 @@ class Deliverer:
             return self.STATUS_TOO_EARLY
 
     async def start_checking(self):
+        logging.info('Пнули проверку очереди.')
+
         await self.check_queue()
 
         if self.__checking_running:
@@ -110,6 +154,8 @@ class Deliverer:
                 return
 
     async def share_message(self, message):
+        logging.info('Постим пост.')
+
         with self._dp.current_state(chat=message.chat.id,
                                     user=message.from_user.id) as state:
             data = await state.get_data()
@@ -145,6 +191,8 @@ class Deliverer:
             traceback.print_exc()
 
     async def parse_message(self, message):
+        logging.info('Парсим сообщение.')
+
         url_base = 'https://api.telegram.org/file/bot' + config.API_TOKEN + '/'
 
         if message.photo:
@@ -219,6 +267,8 @@ class Deliverer:
         return '', message.text
 
     async def post_from_url_to_vk(self, vk_token, group_id, url, caption=''):
+        logging.info('Постим в вк.')
+
         response = await self._vk.handle_url(vk_token, group_id, url, caption)
 
         if 'post_id' in response:
@@ -227,6 +277,8 @@ class Deliverer:
         return response
 
     async def post_from_url_to_channel(self, channel_tg, url, caption=''):
+        logging.info('Постим в канал.')
+
         # попросим вк подготовить файлы
         filepath, extension = self._vk.get_filepath(url)
 
