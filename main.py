@@ -42,6 +42,9 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO)
 
+# запускаем проверку очереди сразу, все необходимое у нас есть
+asyncio.run_coroutine_threadsafe(deliverer.start_checking(), loop)
+
 
 @dp.message_handler(commands=['start'])
 async def cmd_start(message: types.Message):
