@@ -1,12 +1,12 @@
 import asyncio
-import re
 import logging
+import re
 import traceback
+
 import config
 import regexps
-
-from scheduler import Scheduler
 from files_opener import FilesOpener
+from scheduler import Scheduler
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',

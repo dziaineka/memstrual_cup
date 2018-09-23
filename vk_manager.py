@@ -1,10 +1,10 @@
-import urllib
-import tempfile
 import json
-import regexps
 import re
-
+import tempfile
+import urllib
 from os import path
+
+import regexps
 from files_opener import FilesOpener
 
 

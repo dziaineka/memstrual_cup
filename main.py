@@ -1,20 +1,21 @@
 import asyncio
-import aiohttp
 import logging
-import traceback
 import re
-import regexps
-import config
-import states
+import traceback
 
+import aiohttp
 from aiogram import Bot, types
 from aiogram.contrib.fsm_storage.redis import RedisStorage
 from aiogram.dispatcher import Dispatcher
 from aiogram.utils import executor, exceptions
 from aiogram.utils.markdown import text
-from vk_manager import VKM
-from scheduler import Scheduler
+
+import config
+import regexps
+import states
 from deliverer import Deliverer
+from scheduler import Scheduler
+from vk_manager import VKM
 
 # TODO
 # Показать очередь отправки
