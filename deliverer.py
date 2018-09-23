@@ -21,7 +21,8 @@ class Deliverer:
         self._dp = dp
         self._vk = vk
 
-        self._post_queue = self._dp.current_state(chat=1, user=1)
+        self._post_queue = self._dp.current_state(chat=config.QUEUE_ID,
+                                                  user=config.QUEUE_ID)
 
         self.__checking_running = False
 
