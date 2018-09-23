@@ -9,7 +9,6 @@ import states
 
 from aiogram import Bot, types
 from aiogram.contrib.fsm_storage.redis import RedisStorage
-from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import Dispatcher
 from aiogram.utils import executor, exceptions
 from aiogram.utils.markdown import text
@@ -29,8 +28,6 @@ storage = RedisStorage(host=config.REDIS_HOST,
                        port=config.REDIS_PORT,
                        password=config.REDIS_PASSWORD)
 
-# storage = MemoryStorage()
-
 dp = Dispatcher(bot, storage=storage)
 vk = VKM()
 scheduler = Scheduler()
@@ -41,9 +38,6 @@ url_regexp = re.compile(regexps.WEB_URL_REGEX)
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO)
-
-# запускаем проверку очереди сразу, все необходимое у нас есть
-asyncio.run_coroutine_threadsafe(deliverer.start_checking(), loop)
 
 
 @dp.message_handler(commands=['start'])
@@ -381,9 +375,17 @@ async def to_start(message: types.Message):
     await cmd_start(message)
 
 
+async def checking_after_pause():
+    await asyncio.sleep(5)
+    await deliverer.start_checking()
+
+
 async def startup(dispatcher: Dispatcher):
     logging.info('Старт бота.')
     vk.http_session = aiohttp.ClientSession()
+
+    # запускаем проверку очереди сразу, все необходимое у нас есть
+    asyncio.run_coroutine_threadsafe(checking_after_pause(), loop)
 
 
 async def shutdown(dispatcher: Dispatcher):
