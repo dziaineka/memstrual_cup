@@ -181,12 +181,15 @@ class Deliverer:
                                                           url,
                                                           caption)
 
-                await message.reply(response)
+                await self._bot.send_message(message.chat.id, response)
 
             if channel_tg:
                 await self.post_from_url_to_channel(channel_tg,
                                                     url,
                                                     caption)
+
+                await self._bot.send_message(message.chat.id,
+                                             'Запостил в ТГ.')
 
         except Exception:
             traceback.print_exc()
