@@ -210,7 +210,7 @@ class Deliverer:
                 caption = ''
 
             # url фото на сервере Telegram
-            file = await message.bot.get_file(photo['file_id'])
+            file = await self._bot.get_file(photo['file_id'])
             image_url = url_base + file.file_path
 
             return image_url, caption
