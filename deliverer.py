@@ -273,12 +273,12 @@ class Deliverer:
     async def post_from_url_to_vk(self, vk_token, group_id, url, caption=''):
         logging.info('Постим в вк.')
 
-        response = await self._vk.handle_url(vk_token, group_id, url, caption)
+        result = await self._vk.handle_url(vk_token, group_id, url, caption)
 
-        if 'post_id' in response:
-            response = 'Запостил в ВК.'
+        if result is True:
+            result = 'Запостил в ВК.'
 
-        return response
+        return result
 
     async def post_from_url_to_channel(self, channel_tg, url, caption=''):
         logging.info('Постим в канал.')

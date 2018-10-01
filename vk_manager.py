@@ -30,7 +30,7 @@ class VKM:
         async with self.http_session.get(url, params=params) as resp:
             return await resp.json()
 
-    async def request_upload_photo(self, url, data):
+    async def request_post(self, url, data):
         resp = await self.http_session.post(url, data=data)
         return await resp.json(content_type=None)
 
@@ -82,9 +82,10 @@ class VKM:
     async def handle_url(self, user_token, group_id, url, caption=''):
         if (any(video_platform in url for
                 video_platform in self.supported_video_platforms)):
-            # Если это ссылка на видео
-            # то дописать сюда когда-нибудь обработчик
-            pass
+            return await self.post_video_from_url(user_token,
+                                                  group_id,
+                                                  url,
+                                                  caption)
         else:
             url_file = urllib.parse.urlsplit(url.strip()).path.split('/')[-1]
             # Расширение файла из url
@@ -100,9 +101,41 @@ class VKM:
                 # постинг гифок пока что не реализован потому что в телеграме
                 # гифки в формате mp4
                 # return self.post_gif_from_url(url, caption)
-                pass
+                return await self.post_to_wall(user_token,
+                                               group_id,
+                                               caption,
+                                               url)
 
             return await self.post_to_wall(user_token, group_id, caption, url)
+
+    async def post_video_from_url(self, user_token, group_id, url, caption=''):
+        if not url:
+            raise ValueError('URL is required')
+
+        # таким образом мы удалям ссылку из текста, если постим
+        # ее как аттачмент
+        caption = caption.replace(url, '')
+
+        params = {
+            'description': caption,
+            'wallpost': 1,
+            'link': url,
+            'group_id': group_id,
+            'access_token': user_token,
+            'version': '5.78'
+        }
+
+        method_url = 'https://api.vk.com/method/video.save'
+        response = await self.request_get(method_url, params)
+        url = response['response']['upload_url']
+
+        response = await self.request_post(url,
+                                           data=None)
+
+        if response['response'] == 1:
+            return True
+        else:
+            return response
 
     async def post_image_from_url(self, user_token, group_id, url, caption=''):
             # Загружаем фотку на диск
@@ -153,8 +186,8 @@ class VKM:
         # подготавливаем и заливаем фото
         with FilesOpener(paths, key_format='photo') as photos_files:
             photo = {'photo': photos_files[0][1][1]}
-            response = await self.request_upload_photo(upload_server,
-                                                       data=photo)
+            response = await self.request_post(upload_server,
+                                               data=photo)
 
         # сохраняем фото и останется только этап постинга, сложна
         params.update(response)  # добавляем данные фото в параметры запроса
@@ -197,7 +230,11 @@ class VKM:
         url = 'https://api.vk.com/method/wall.post'
 
         response = await self.request_get(url, params)
-        return json.dumps(response['response'])
+
+        if 'post_id' in json.dumps(response['response']):
+            return True
+        else:
+            return json.dumps(response['response'])
 
     async def check_wall_post(self, user_token, url):
         url_splited = self.vk_wall_url.search(url)

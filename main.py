@@ -18,8 +18,8 @@ from scheduler import Scheduler
 from vk_manager import VKM
 
 # TODO
-# Показать очередь отправки
-# Хранилище в БД
+# отправка гифок
+
 
 loop = asyncio.get_event_loop()
 
@@ -108,11 +108,6 @@ async def cmd_vk(message: types.Message):
     # Update user's state
     await state.set_state(states.VK_TOKEN)
 
-    token_link = 'https://oauth.vk.com/authorize?client_id=6601615&' +\
-                 'scope=groups,wall,offline,photos&' +\
-                 'redirect_uri=https://oauth.vk.com/blank.html&' +\
-                 'display=page&v=5.78&response_type=token'
-
     line2 = 'Перейди по ссылке и скопируй из адресной строки весь ' +\
             'текст, находящийся между \"access_token=\" и \"&\".'
 
@@ -126,7 +121,7 @@ async def cmd_vk(message: types.Message):
     keyboard = types.InlineKeyboardMarkup(row_width=2)
 
     url_button = types.InlineKeyboardButton(text="Получить токен",
-                                            url=token_link)
+                                            url=config.VK_TOKEN_LINK)
 
     keyboard.add(url_button)
 
