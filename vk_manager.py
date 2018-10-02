@@ -82,6 +82,7 @@ class VKM:
     async def handle_url(self, user_token, group_id, url, caption=''):
         if (any(video_platform in url for
                 video_platform in self.supported_video_platforms)):
+            # тут постим видео, если оно по ссылке
             return await self.post_video_from_url(user_token,
                                                   group_id,
                                                   url,
@@ -97,14 +98,11 @@ class VKM:
                                                       group_id,
                                                       url,
                                                       caption)
-            elif extension == 'gif':
-                # постинг гифок пока что не реализован потому что в телеграме
-                # гифки в формате mp4
-                # return self.post_gif_from_url(url, caption)
-                return await self.post_to_wall(user_token,
-                                               group_id,
-                                               caption,
-                                               url)
+            elif extension == 'mp4':
+                return await self.post_video_from_url(user_token,
+                                                      group_id,
+                                                      url,
+                                                      caption)
 
             return await self.post_to_wall(user_token, group_id, caption, url)
 
@@ -127,15 +125,20 @@ class VKM:
 
         method_url = 'https://api.vk.com/method/video.save'
         response = await self.request_get(method_url, params)
-        url = response['response']['upload_url']
+
+        try:
+            url = response['response']['upload_url']
+        except KeyError:
+            url = response['response']['video']['upload_url']
 
         response = await self.request_post(url,
                                            data=None)
 
-        if response['response'] == 1:
-            return True
-        else:
-            return response
+        try:
+            if response['response'] == 1:
+                return True
+        except KeyError:
+            return response['error_msg']
 
     async def post_image_from_url(self, user_token, group_id, url, caption=''):
             # Загружаем фотку на диск
