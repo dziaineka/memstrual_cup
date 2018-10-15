@@ -255,36 +255,53 @@ class VKM:
             response = await self.request_get(api_url, params)
 
             try:
-                new_url = \
-                    response['response'][0]['attachment']['photo']['src_big']
-            except IndexError:
+                post = response['response'][0]['attachment']['photo']
+                new_url = self.get_biggest_size_link(post)
+            except KeyError:
                 new_url = url
 
             return new_url
         else:
             return url
+
+    @staticmethod
+    def get_biggest_size_link(vk_post):
+        if 'src_xxxbig' in vk_post:
+            return vk_post['src_xxxbig']
+        elif 'src_xxbig' in vk_post:
+            return vk_post['src_xxbig']
+        elif 'src_xbig' in vk_post:
+            return vk_post['src_xbig']
+        elif 'src_big' in vk_post:
+            return vk_post['src_big']
+        elif 'src' in vk_post:
+            return vk_post['src']
+        elif 'src_small' in vk_post:
+            return vk_post['src_small']
+        else:
+            raise KeyError
 
     async def check_photo_post(self, user_token, url):
         url_splited = self.vk_photo_url.search(url)
         pic_id = url_splited.group('id')
 
-        if pic_id:
-            api_url = 'https://api.vk.com/method/photos.getById'
-
-            params = (
-                ('photos', '-' + pic_id),
-                ('access_token', user_token),
-                ('version', '5.78'),
-            )
-
-            response = await self.request_get(api_url, params)
-
-            try:
-                new_url = response['response'][0]['src_xxxbig']
-
-            except IndexError:
-                new_url = url
-
-            return new_url
-        else:
+        if not pic_id:
             return url
+
+        api_url = 'https://api.vk.com/method/photos.getById'
+
+        params = (
+            ('photos', '-' + pic_id),
+            ('access_token', user_token),
+            ('version', '5.78'),
+        )
+
+        response = await self.request_get(api_url, params)
+
+        try:
+            post = response['response'][0]
+            new_url = self.get_biggest_size_link(post)
+        except KeyError:
+            return url
+
+        return new_url
