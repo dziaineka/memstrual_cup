@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 import tempfile
 import urllib
@@ -7,6 +8,9 @@ from os import path
 import regexps
 from files_opener import FilesOpener
 
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO)
 
 class VKM:
     def __init__(self):
@@ -28,7 +32,15 @@ class VKM:
 
     async def request_get(self, url, params):
         async with self.http_session.get(url, params=params) as resp:
-            return await resp.json()
+            status = resp.status
+
+            try:
+                response = await resp.json(content_type=None)
+            except json.decoder.JSONDecodeError:
+                logging.warning('Опять результат реквеста не смог в json')
+                response = None
+
+            return response, status
 
     async def request_post(self, url, data):
         resp = await self.http_session.post(url, data=data)
@@ -42,7 +54,7 @@ class VKM:
 
         url = 'https://api.vk.com/method/account.getProfileInfo'
 
-        response = await self.request_get(url, params)
+        response, status = await self.request_get(url, params)
 
         try:
             account_info = response['response']
@@ -67,7 +79,7 @@ class VKM:
 
         url = 'https://api.vk.com/method/groups.getById'
 
-        response = await self.request_get(url, params)
+        response, status = await self.request_get(url, params)
 
         group_info = response['response'][0]
         name = group_info['name']
@@ -124,7 +136,7 @@ class VKM:
         }
 
         method_url = 'https://api.vk.com/method/video.save'
-        response = await self.request_get(method_url, params)
+        response, status = await self.request_get(method_url, params)
 
         try:
             url = response['response']['upload_url']
@@ -183,7 +195,7 @@ class VKM:
 
         url = 'https://api.vk.com/method/photos.getWallUploadServer'
 
-        response = await self.request_get(url, params)
+        response, status = await self.request_get(url, params)
         upload_server = response['response']['upload_url']
 
         # подготавливаем и заливаем фото
@@ -196,7 +208,7 @@ class VKM:
         params.update(response)  # добавляем данные фото в параметры запроса
         url = 'https://api.vk.com/method/photos.saveWallPhoto'
 
-        response = await self.request_get(url, params)
+        response, status = await self.request_get(url, params)
         return response['response']
 
     @staticmethod
@@ -232,12 +244,14 @@ class VKM:
 
         url = 'https://api.vk.com/method/wall.post'
 
-        response = await self.request_get(url, params)
+        response, status = await self.request_get(url, params)
 
-        if 'post_id' in json.dumps(response['response']):
+        if status == 200:
             return True
+        elif status == 414:
+            return 'Слишком большая длина текста для постинга в ВК. ВК лох.'
         else:
-            return json.dumps(response['response'])
+            return ('Что-то пошло не так, код ошибки - ' + status)
 
     async def check_wall_post(self, user_token, url):
         url_splited = self.vk_wall_url.search(url)
@@ -252,7 +266,7 @@ class VKM:
                 ('version', '5.78'),
             )
 
-            response = await self.request_get(api_url, params)
+            response, status = await self.request_get(api_url, params)
 
             try:
                 post = response['response'][0]['attachment']['photo']
@@ -296,7 +310,7 @@ class VKM:
             ('version', '5.78'),
         )
 
-        response = await self.request_get(api_url, params)
+        response, status = await self.request_get(api_url, params)
 
         try:
             post = response['response'][0]
