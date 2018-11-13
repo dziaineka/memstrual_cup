@@ -7,3 +7,5 @@ REDIS_PORT = 00000
 REDIS_PASSWORD = 'PUT_PASSWORD_HERE'
 
 QUEUE_ID = 1
+
+URL_BASE = 'https://api.telegram.org/file/bot' + API_TOKEN + '/'
