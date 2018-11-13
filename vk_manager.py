@@ -12,6 +12,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO)
 
+
 class VKM:
     def __init__(self):
         self.allowed_image_extensions = ['.jpeg',
@@ -220,7 +221,6 @@ class VKM:
 
         try:
             filepath, headers = urllib.request.urlretrieve(url, filename)
-            headers = headers  # чтобы не было предупреждения
         except Exception:
             return '', ''
 
