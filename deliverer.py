@@ -197,8 +197,6 @@ class Deliverer:
     async def parse_message(self, message):
         logging.info('Парсим сообщение.')
 
-        url_base = 'https://api.telegram.org/file/bot' + config.API_TOKEN + '/'
-
         if message.photo:
             # Получаем фотку наилучшего качества(последнюю в массиве)
             photo = message.photo[-1]
@@ -211,7 +209,7 @@ class Deliverer:
 
             # url фото на сервере Telegram
             file = await self._bot.get_file(photo['file_id'])
-            image_url = url_base + file.file_path
+            image_url = config.URL_BASE + file.file_path
 
             return image_url, caption
 
