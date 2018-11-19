@@ -5,33 +5,27 @@ import pytz
 from aiogram import types
 
 import regexps
-import states
+from states import Form
 
 
 class Scheduler:
     def __init__(self):
         self.datetime_regexp = re.compile(regexps.FULL_DATETIME)
 
-    async def schedule_post(self, dispatcher, message):
+    async def schedule_post(self, state, message):
         # сохраним ID поста, который нужно запланировать
-        with dispatcher.current_state(chat=message.chat.id,
-                                      user=message.from_user.id) as state:
 
-            data = await state.get_data()
-            data['message_to_schedule_id'] = message.message_id
-            await state.update_data(data=data,
-                                    message_to_schedule_id=message.message_id)
+        data = await state.get_data()
+        data['message_to_schedule_id'] = message.message_id
+        await state.update_data(data=data,
+                                message_to_schedule_id=message.message_id)
 
         # пользователь вводит время
-        await self.input_time_to_post(dispatcher, message)
+        await self.input_time_to_post(state, message)
 
-    async def input_time_to_post(self, dispatcher, message):
-        # Get current state
-        state = dispatcher.current_state(chat=message.chat.id,
-                                         user=message.from_user.id)
-
+    async def input_time_to_post(self, state, message):
         # Update user's state
-        await state.set_state(states.DATETIME_INPUT)
+        await state.set_state(Form.datetime_input)
 
         post_date = self.date_to_str(self.get_today_date())
 

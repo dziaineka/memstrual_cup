@@ -157,20 +157,20 @@ class Deliverer:
     async def share_message(self, message):
         logging.info('Постим пост.')
 
-        with self._dp.current_state(chat=message.chat.id,
-                                    user=message.from_user.id) as state:
-            data = await state.get_data()
+        state = self._dp.current_state(chat=message.chat.id,
+                                       user=message.from_user.id)
+        data = await state.get_data()
 
-            vk_token = None
-            group_id = None
-            channel_tg = None
+        vk_token = None
+        group_id = None
+        channel_tg = None
 
-            if ('vk_token' in data) and ('group_id' in data):
-                vk_token = data['vk_token'].strip()
-                group_id = data['group_id'].strip()
+        if ('vk_token' in data) and ('group_id' in data):
+            vk_token = data['vk_token'].strip()
+            group_id = data['group_id'].strip()
 
-            if 'channel_tg' in data:
-                channel_tg = data['channel_tg'].strip()
+        if 'channel_tg' in data:
+            channel_tg = data['channel_tg'].strip()
 
         try:
             url, caption = await self.parse_message(message)
@@ -223,46 +223,42 @@ class Deliverer:
 
                 # тут посмотреть не скормили ли нам ссылку на псто вк,
                 # оттуда надо утянуть картинку
-                with self._dp.current_state(
-                        chat=message.chat.id,
-                        user=message.from_user.id) as state:
-                    data = await state.get_data()
+                state = self._dp.current_state(chat=message.chat.id,
+                                               user=message.from_user.id)
 
-                    vk_token = None
+                data = await state.get_data()
 
-                    warning = 'Нужно подключиться к вк, ' +\
-                        'чтобы забирать оттуда картинки.'
+                vk_token = None
 
-                    if 'vk_token' in data:
-                        vk_token = data['vk_token'].strip()
+                warning = 'Нужно подключиться к вк, ' +\
+                    'чтобы забирать оттуда картинки.'
 
-                    if self.vk_wall_url.match(urls_with_captions[0]):
-                        if not vk_token:
-                            await self._bot.send_message(message.chat.id,
-                                                         warning)
+                if 'vk_token' in data:
+                    vk_token = data['vk_token'].strip()
 
-                            return urls_with_captions[0], message.text
-
-                        pic_url = await self._vk.check_wall_post(
-                            vk_token,
-                            urls_with_captions[0])
-
-                    elif self.vk_photo_url.match(urls_with_captions[0]):
-                        if not vk_token:
-                            await self._bot.send_message(message.chat.id,
-                                                         warning)
-
-                            return urls_with_captions[0], message.text
-
-                        pic_url = await self._vk.check_photo_post(
-                            vk_token,
-                            urls_with_captions[0])
-
-                    else:
+                if self.vk_wall_url.match(urls_with_captions[0]):
+                    if not vk_token:
+                        await self._bot.send_message(message.chat.id, warning)
                         return urls_with_captions[0], message.text
 
-                    urls_with_captions = (
-                        pic_url, urls_with_captions[1])
+                    pic_url = await self._vk.check_wall_post(
+                        vk_token,
+                        urls_with_captions[0])
+
+                elif self.vk_photo_url.match(urls_with_captions[0]):
+                    if not vk_token:
+                        await self._bot.send_message(message.chat.id, warning)
+                        return urls_with_captions[0], message.text
+
+                    pic_url = await self._vk.check_photo_post(
+                        vk_token,
+                        urls_with_captions[0])
+
+                else:
+                    return urls_with_captions[0], message.text
+
+                urls_with_captions = (
+                    pic_url, urls_with_captions[1])
 
                 return urls_with_captions
 
