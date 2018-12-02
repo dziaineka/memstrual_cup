@@ -10,6 +10,7 @@ from aiogram.dispatcher import FSMContext
 from aiogram.utils import executor, exceptions
 from aiogram.utils.markdown import text
 from os import remove
+from os.path import getsize
 
 import config
 import regexps
@@ -89,6 +90,14 @@ async def cmd_start(message: types.Message):
                            instructions)
 
 
+def wipe_log():
+    open(config.LOG_PATH, 'w').close()
+
+
+def log_is_big():
+    return (getsize(config.LOG_PATH) > 1000000)
+
+
 @dp.message_handler(commands=['getlog'], state='*')
 async def cmd_getlog(message: types.Message):
     logger.info('Отдаю лог.')
@@ -99,10 +108,14 @@ async def cmd_getlog(message: types.Message):
 
         await bot.send_document(chat_id=message.chat.id, document=log)
 
+    if log_is_big():
+        wipe_log()
+        logger.info('Удалил лог потому что он большой.')
+
 
 @dp.message_handler(commands=['dellog'], state='*')
 async def cmd_dellog(message: types.Message):
-    open(config.LOG_PATH, 'w').close()
+    wipe_log()
 
     logger.info('Удалил лог.')
     await bot.send_message(message.chat.id, 'Удалил лог.')
@@ -404,6 +417,7 @@ async def startup(dispatcher: Dispatcher):
 async def shutdown(dispatcher: Dispatcher):
     logger.info('Убиваем бота.')
 
+    wipe_log()
     await dispatcher.storage.close()
     await dispatcher.storage.wait_closed()
     await vk.http_session.close()
