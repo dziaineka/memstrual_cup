@@ -8,9 +8,8 @@ from os import path
 import regexps
 from files_opener import FilesOpener
 
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO)
+
+logger = logging.getLogger('memstrual_log')
 
 
 class VKM:
@@ -38,7 +37,7 @@ class VKM:
             try:
                 response = await resp.json(content_type=None)
             except json.decoder.JSONDecodeError:
-                logging.warning('Опять результат реквеста не смог в json')
+                logger.warning('Опять результат реквеста не смог в json')
                 response = None
 
             return response, status
