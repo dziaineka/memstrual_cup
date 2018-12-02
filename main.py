@@ -9,6 +9,7 @@ from aiogram.contrib.fsm_storage.redis import RedisStorage
 from aiogram.dispatcher import FSMContext
 from aiogram.utils import executor, exceptions
 from aiogram.utils.markdown import text
+from os import remove
 
 import config
 import regexps
@@ -16,9 +17,36 @@ from deliverer import Deliverer
 from scheduler import Scheduler
 from states import Form
 from vk_manager import VKM
+from files_opener import FilesOpener
 
 # TODO
 # отправка гифок
+
+
+def setup_logging():
+    # create logger
+    logger = logging.getLogger('memstrual_log')
+    logger.setLevel(logging.DEBUG)
+
+    # create file handler which logs even debug messages
+    fh = logging.FileHandler(config.LOG_PATH)
+    fh.setLevel(logging.DEBUG)
+
+    # create console handler with a higher log level
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+
+    # create formatter and add it to the handlers
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    fh.setFormatter(formatter)
+    ch.setFormatter(formatter)
+
+    # add the handlers to the logger
+    logger.addHandler(fh)
+    logger.addHandler(ch)
+
+    return logger
 
 
 loop = asyncio.get_event_loop()
@@ -36,9 +64,7 @@ deliverer = Deliverer.get_instance(bot, dp, vk)
 
 url_regexp = re.compile(regexps.WEB_URL_REGEX)
 
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO)
+logger = setup_logging()
 
 
 @dp.message_handler(commands=['start'])
@@ -46,7 +72,7 @@ async def cmd_start(message: types.Message):
     """
     Conversation's entry point
     """
-    logging.info('Старт работы бота.')
+    logger.info('Старт работы бота.')
 
     # Set state
     await Form.initial.set()
@@ -63,12 +89,31 @@ async def cmd_start(message: types.Message):
                            instructions)
 
 
+@dp.message_handler(commands=['getlog'], state='*')
+async def cmd_getlog(message: types.Message):
+    logger.info('Отдаю лог.')
+
+    with FilesOpener(config.LOG_PATH) as files:
+        log = {}
+        log = files[0][1][1]  # пизда
+
+        await bot.send_document(chat_id=message.chat.id, document=log)
+
+
+@dp.message_handler(commands=['dellog'], state='*')
+async def cmd_dellog(message: types.Message):
+    open(config.LOG_PATH, 'w').close()
+
+    logger.info('Удалил лог.')
+    await bot.send_message(message.chat.id, 'Удалил лог.')
+
+
 @dp.message_handler(commands=['reset'], state='*')
 @dp.message_handler(lambda message: message.text.lower() == 'reset', state='*')
 async def cmd_reset(message: types.Message, state: FSMContext):
     # Get current state
 
-    logging.info('Сброс.')
+    logger.info('Сброс.')
 
     await state.finish()
     await Form.initial.set()
@@ -81,7 +126,7 @@ async def cmd_reset(message: types.Message, state: FSMContext):
 @dp.message_handler(lambda message: message.text.lower() == 'channel',
                     state='*')
 async def cmd_channel(message: types.Message):
-    logging.info('Настраиваем канал.')
+    logger.info('Настраиваем канал.')
 
     await Form.channel_name.set()
 
@@ -96,7 +141,7 @@ async def cmd_channel(message: types.Message):
 @dp.message_handler(commands=['vk'], state='*')
 @dp.message_handler(lambda message: message.text.lower() == 'vk', state='*')
 async def cmd_vk(message: types.Message):
-    logging.info('Настраиваем ВК.')
+    logger.info('Настраиваем ВК.')
 
     await Form.vk_token.set()
 
@@ -129,7 +174,7 @@ async def process_channel(message: types.Message, state: FSMContext):
     """
     Process user channel name
     """
-    logging.info('Обрабатываем ввод имени канала.')
+    logger.info('Обрабатываем ввод имени канала.')
 
     # Save name to storage and go to next step
     channel_tg = message.text.strip()
@@ -151,7 +196,7 @@ async def process_token(message: types.Message, state: FSMContext):
     """
     Process user token
     """
-    logging.info('Обрабатываем ввод токена ВК.')
+    logger.info('Обрабатываем ввод токена ВК.')
 
     vk_token = message.text
 
@@ -175,7 +220,7 @@ async def process_token(message: types.Message, state: FSMContext):
 
 @dp.message_handler(state=Form.group_id)
 async def process_group_id(message: types.Message, state: FSMContext):
-    logging.info('Обрабатываем ввод ИД группы ВК.')
+    logger.info('Обрабатываем ввод ИД группы ВК.')
 
     group_id = message.text
 
@@ -203,7 +248,7 @@ async def process_group_id(message: types.Message, state: FSMContext):
 
 @dp.callback_query_handler(state=Form.datetime_input)
 async def callback_inline(call, state: FSMContext):
-    logging.info('Обрабатываем нажатие кнопки дня публикации.')
+    logger.info('Обрабатываем нажатие кнопки дня публикации.')
 
     # state = dp.current_state(chat=call.message.chat.id,
     #                          user=call.from_user.id)
@@ -247,7 +292,7 @@ async def callback_inline(call, state: FSMContext):
 @dp.message_handler(state=Form.datetime_input,
                     content_types=types.ContentType.TEXT)
 async def process_postdate(message: types.Message, state: FSMContext):
-    logging.info('Обрабатываем ввод времени публикации (или сброс ввода).')
+    logger.info('Обрабатываем ввод времени публикации (или сброс ввода).')
 
     # Если в сообщении есть ссылка, то это очевидно новый псто, забей на старый
     if url_regexp.split(message.text)[1:]:
@@ -293,7 +338,7 @@ async def process_postdate(message: types.Message, state: FSMContext):
 @dp.message_handler(state=Form.datetime_input,
                     content_types=types.ContentType.PHOTO)
 async def break_input_by_photo(message: types.Message, state: FSMContext):
-    logging.info('Обрабатываем сброс ввода времени через новую картинку.')
+    logger.info('Обрабатываем сброс ввода времени через новую картинку.')
 
     # Update user's state
     await Form.operational_mode.set()
@@ -303,7 +348,7 @@ async def break_input_by_photo(message: types.Message, state: FSMContext):
 @dp.message_handler(state=Form.operational_mode,
                     content_types=types.ContentType.PHOTO)
 async def process_photos(message: types.Message, state: FSMContext):
-    logging.info('Обрабатываем посылку картинки.')
+    logger.info('Обрабатываем посылку картинки.')
 
     try:
         await scheduler.schedule_post(state, message)
@@ -315,7 +360,7 @@ async def process_photos(message: types.Message, state: FSMContext):
 @dp.message_handler(state=Form.operational_mode,
                     content_types=types.ContentType.TEXT)
 async def process_text(message: types.Message, state: FSMContext):
-    logging.info('Обрабатываем посылку текста.')
+    logger.info('Обрабатываем посылку текста.')
 
     try:
         await scheduler.schedule_post(state, message)
@@ -326,7 +371,7 @@ async def process_text(message: types.Message, state: FSMContext):
 
 @dp.message_handler(state=Form.initial)
 async def no_way(message: types.Message):
-    logging.info('Обработка ввода при ненастроенных получателях.')
+    logger.info('Обработка ввода при ненастроенных получателях.')
 
     line1 = 'Пока не настроишь места для пересылки, тут будет скучновато.'
     line2 = 'Жми /vk или /channel и следуй инструкциям.'
@@ -339,7 +384,7 @@ async def no_way(message: types.Message):
 
 @dp.message_handler(state=None)
 async def to_start(message: types.Message):
-    logging.info('При вводе любого сообщения стартуем.')
+    logger.info('При вводе любого сообщения стартуем.')
     await cmd_start(message)
 
 
@@ -349,7 +394,7 @@ async def checking_after_pause():
 
 
 async def startup(dispatcher: Dispatcher):
-    logging.info('Старт бота.')
+    logger.info('Старт бота.')
     vk.http_session = aiohttp.ClientSession()
 
     # запускаем проверку очереди сразу, все необходимое у нас есть
@@ -357,7 +402,7 @@ async def startup(dispatcher: Dispatcher):
 
 
 async def shutdown(dispatcher: Dispatcher):
-    logging.info('Убиваем бота.')
+    logger.info('Убиваем бота.')
 
     await dispatcher.storage.close()
     await dispatcher.storage.wait_closed()

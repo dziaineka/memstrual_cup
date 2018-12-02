@@ -8,9 +8,7 @@ import regexps
 from files_opener import FilesOpener
 from scheduler import Scheduler
 
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO)
+logger = logging.getLogger('memstrual_log')
 
 
 class Deliverer:
@@ -36,7 +34,7 @@ class Deliverer:
 
     @staticmethod
     def get_instance(bot, dp, vk):
-        logging.info('Получаем доставщика постов.')
+        logger.info('Получаем доставщика постов.')
 
         if Deliverer.__instance is None:
             Deliverer.__instance = Deliverer(bot, dp, vk)
@@ -55,7 +53,7 @@ class Deliverer:
                      message_id,
                      user_id,
                      silent=False):
-        logging.info('Добавляем пост в очередь.')
+        logger.info('Добавляем пост в очередь.')
 
         post_time = Scheduler.datetime_to_str(post_time)
 
@@ -81,7 +79,7 @@ class Deliverer:
             await self.start_checking()
 
     async def pop(self):
-        logging.info('Достаем пост из очереди.')
+        logger.info('Достаем пост из очереди.')
 
         queue = await self._post_queue.get_data()
 
@@ -101,12 +99,13 @@ class Deliverer:
         return cur_time >= post_time
 
     async def check_queue(self):
-        logging.info('Проверяем очередь, мб уже есть что постить.')
+        logger.info('Проверяем очередь, мб уже есть что постить.')
 
         try:
             nearest_post = await self.pop()
             post_dtime = Scheduler.str_to_datetime(nearest_post['post_time'])
         except IndexError:
+            logger.info('Походу очередь пуста.')
             return self.STATUS_EMPTY
 
         if self.its_time_to_post(Scheduler.get_current_datetime(),
@@ -134,7 +133,7 @@ class Deliverer:
             return self.STATUS_TOO_EARLY
 
     async def start_checking(self):
-        logging.info('Пнули проверку очереди.')
+        logger.info('Пнули проверку очереди.')
 
         await self.check_queue()
 
@@ -155,7 +154,7 @@ class Deliverer:
                 return
 
     async def share_message(self, message):
-        logging.info('Постим пост.')
+        logger.info('Постим пост.')
 
         state = self._dp.current_state(chat=message.chat.id,
                                        user=message.from_user.id)
@@ -195,7 +194,7 @@ class Deliverer:
             traceback.print_exc()
 
     async def parse_message(self, message):
-        logging.info('Парсим сообщение.')
+        logger.info('Парсим сообщение.')
 
         if message.photo:
             # Получаем фотку наилучшего качества(последнюю в массиве)
@@ -265,7 +264,7 @@ class Deliverer:
         return '', message.text
 
     async def post_from_url_to_vk(self, vk_token, group_id, url, caption=''):
-        logging.info('Постим в вк.')
+        logger.info('Постим в вк.')
 
         result = await self._vk.handle_url(vk_token, group_id, url, caption)
 
@@ -275,7 +274,7 @@ class Deliverer:
         return result
 
     async def post_from_url_to_channel(self, channel_tg, url, caption=''):
-        logging.info('Постим в канал.')
+        logger.info('Постим в канал.')
 
         # попросим вк подготовить файлы
         filepath, extension = self._vk.get_filepath(url)
@@ -291,7 +290,7 @@ class Deliverer:
                 caption = caption.replace(url, '')
 
                 await self._bot.send_photo(chat_id=channel_tg,
-                                           photo=photo,
-                                           caption=caption)
+                                        photo=photo,
+                                        caption=caption)
         else:
             await self._bot.send_message(channel_tg, caption)
