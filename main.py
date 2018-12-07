@@ -9,16 +9,15 @@ from aiogram.contrib.fsm_storage.redis import RedisStorage
 from aiogram.dispatcher import FSMContext
 from aiogram.utils import executor, exceptions
 from aiogram.utils.markdown import text
-from os import remove
-from os.path import getsize
 
 import config
 import regexps
 from deliverer import Deliverer
+from logManager import LogManager
 from scheduler import Scheduler
 from states import Form
 from vk_manager import VKM
-from files_opener import FilesOpener
+
 
 # TODO
 # отправка гифок
@@ -61,6 +60,7 @@ storage = RedisStorage(host=config.REDIS_HOST,
 dp = Dispatcher(bot, storage=storage)
 vk = VKM()
 scheduler = Scheduler()
+log_manager = LogManager(bot)
 deliverer = Deliverer.get_instance(bot, dp, vk)
 
 url_regexp = re.compile(regexps.WEB_URL_REGEX)
@@ -90,32 +90,15 @@ async def cmd_start(message: types.Message):
                            instructions)
 
 
-def wipe_log():
-    open(config.LOG_PATH, 'w').close()
-
-
-def log_is_big():
-    return (getsize(config.LOG_PATH) > 1000000)
-
-
 @dp.message_handler(commands=['getlog'], state='*')
 async def cmd_getlog(message: types.Message):
     logger.info('Отдаю лог.')
-
-    with FilesOpener(config.LOG_PATH) as files:
-        log = {}
-        log = files[0][1][1]  # пизда
-
-        await bot.send_document(chat_id=message.chat.id, document=log)
-
-    if log_is_big():
-        wipe_log()
-        logger.info('Удалил лог потому что он большой.')
+    await log_manager.send_log(chat_id=message.chat.id)
 
 
 @dp.message_handler(commands=['dellog'], state='*')
 async def cmd_dellog(message: types.Message):
-    wipe_log()
+    log_manager.wipe_log()
 
     logger.info('Удалил лог.')
     await bot.send_message(message.chat.id, 'Удалил лог.')
@@ -367,7 +350,9 @@ async def process_photos(message: types.Message, state: FSMContext):
         await scheduler.schedule_post(state, message)
 
     except Exception:
+        traceback.print_exc(file=config.LOG_PATH)
         traceback.print_exc()
+        await log_manager.panic_sending()
 
 
 @dp.message_handler(state=Form.operational_mode,
@@ -379,7 +364,9 @@ async def process_text(message: types.Message, state: FSMContext):
         await scheduler.schedule_post(state, message)
 
     except Exception:
+        traceback.print_exc(file=config.LOG_PATH)
         traceback.print_exc()
+        await log_manager.panic_sending()
 
 
 @dp.message_handler(state=Form.initial)
@@ -401,9 +388,14 @@ async def to_start(message: types.Message):
     await cmd_start(message)
 
 
-async def checking_after_pause():
+async def checking_queue_after_pause():
     await asyncio.sleep(5)
     await deliverer.start_checking()
+
+
+async def checking_log_after_pause():
+    await asyncio.sleep(20)
+    await log_manager.start_checking()
 
 
 async def startup(dispatcher: Dispatcher):
@@ -411,13 +403,15 @@ async def startup(dispatcher: Dispatcher):
     vk.http_session = aiohttp.ClientSession()
 
     # запускаем проверку очереди сразу, все необходимое у нас есть
-    asyncio.run_coroutine_threadsafe(checking_after_pause(), loop)
+    asyncio.run_coroutine_threadsafe(checking_queue_after_pause(), loop)
+
+    # запускаем проверку переполненности лога
+    asyncio.run_coroutine_threadsafe(checking_log_after_pause(), loop)
 
 
 async def shutdown(dispatcher: Dispatcher):
     logger.info('Убиваем бота.')
 
-    wipe_log()
     await dispatcher.storage.close()
     await dispatcher.storage.wait_closed()
     await vk.http_session.close()
