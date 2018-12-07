@@ -8,7 +8,6 @@ from os import path
 import regexps
 from files_opener import FilesOpener
 
-
 logger = logging.getLogger('memstrual_log')
 
 

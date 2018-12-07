@@ -1,7 +1,7 @@
-import asyncio
 import logging
 import re
 import traceback
+from asyncio import sleep
 
 import config
 import regexps
@@ -148,7 +148,7 @@ class Deliverer:
             if status == self.STATUS_OK:
                 continue
             elif status == self.STATUS_TOO_EARLY:
-                await asyncio.sleep(20)
+                await sleep(20)
             elif status == self.STATUS_EMPTY:
                 self.__checking_running = False
                 return
@@ -290,7 +290,7 @@ class Deliverer:
                 caption = caption.replace(url, '')
 
                 await self._bot.send_photo(chat_id=channel_tg,
-                                        photo=photo,
-                                        caption=caption)
+                                           photo=photo,
+                                           caption=caption)
         else:
             await self._bot.send_message(channel_tg, caption)
