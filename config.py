@@ -10,3 +10,5 @@ QUEUE_ID = 1
 
 URL_BASE = 'https://api.telegram.org/file/bot' + API_TOKEN + '/'
 LOG_PATH = '/tmp/memstrual.log'
+
+ADMIN_ID = 15726346
