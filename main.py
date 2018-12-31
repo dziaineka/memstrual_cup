@@ -17,6 +17,7 @@ from logManager import LogManager
 from scheduler import Scheduler
 from states import Form
 from vk_manager import VKM
+from exceptions import NoTimeInStringException
 
 
 # TODO
@@ -299,11 +300,19 @@ async def process_postdate(message: types.Message, state: FSMContext):
 
         # и вызовем обработчик ссылок
         await process_text(message, state)
+        return
     else:
         # если ссылки нет, то будем парсить время на куда отложить
         data = await state.get_data()
         post_date = scheduler.str_to_date(data['post_date'])
-        seconds = scheduler.parse_time_input(post_date, message.text)
+
+        try:
+            seconds = scheduler.parse_time_input(post_date, message.text)
+        except NoTimeInStringException:
+            # в тексте нет ничего похожего на время, поэтому пошлем
+            # сообщение в обработчик постов
+            await process_text(message, state)
+            return
 
         if seconds < 0:
             await bot.send_message(message.chat.id,

@@ -1,0 +1,2 @@
+class NoTimeInStringException(Exception):
+    pass

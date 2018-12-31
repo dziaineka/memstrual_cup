@@ -5,6 +5,7 @@ import pytz
 from aiogram import types
 
 import regexps
+from exceptions import NoTimeInStringException
 from states import Form
 
 
@@ -99,6 +100,8 @@ class Scheduler:
 
                     if time_split[5]:
                         year = int(time_split[5])
+        else:
+            raise NoTimeInStringException('String doesnt contain time.')
 
         # если ввели ноль и дата сегодняшняя, то постим сразу
         zero_time = hour == 0 and minutes == 0
