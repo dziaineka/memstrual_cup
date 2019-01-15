@@ -103,11 +103,6 @@ class Scheduler:
         else:
             raise NoTimeInStringException('String doesnt contain time.')
 
-        # если ввели ноль и дата сегодняшняя, то постим сразу
-        zero_time = hour == 0 and minutes == 0
-        if zero_time and post_date == date.today():
-            return 0
-
         datetime_in_future = self.get_current_datetime()
 
         datetime_in_future = datetime_in_future.replace(year=year)
@@ -203,6 +198,11 @@ class Scheduler:
             text=button_text,
             callback_data="послезавтра")
 
+        button_send_now = types.InlineKeyboardButton(
+            text='Запостить сейчас',
+            callback_data="сейчас")
+
         keyboard.add(button_today, button_tomorrow, button_next_day)
+        keyboard.add(button_send_now)
 
         return keyboard
