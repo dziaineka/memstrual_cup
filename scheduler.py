@@ -156,7 +156,9 @@ class Scheduler:
     @staticmethod
     def str_to_date(str_date):
         datestr = str_date.split('/')
-        return datetime.strptime(datestr[0] + datestr[1] + datestr[2],
+        return datetime.strptime(datestr[0].rjust(4, '0') +
+                                 datestr[1].rjust(2, '0') +
+                                 datestr[2].rjust(2, '0'),
                                  "%Y%m%d").date()
 
     @staticmethod
