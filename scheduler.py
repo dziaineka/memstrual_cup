@@ -16,10 +16,8 @@ class Scheduler:
     async def schedule_post(self, state, message):
         # сохраним ID поста, который нужно запланировать
 
-        data = await state.get_data()
-        data['message_to_schedule_id'] = message.message_id
-        await state.update_data(data=data,
-                                message_to_schedule_id=message.message_id)
+        async with state.proxy() as data:
+            data['message_to_schedule_id'] = message.message_id
 
         # пользователь вводит время
         await self.input_time_to_post(state, message)
@@ -30,10 +28,8 @@ class Scheduler:
 
         post_date = self.date_to_str(self.get_today_date())
 
-        data = await state.get_data()
-
-        data['post_date'] = post_date
-        await state.update_data(data=data, post_date=post_date)
+        async with state.proxy() as data:
+            data['post_date'] = post_date
 
         keyboard = self.get_day_selection('сегодня')
 
