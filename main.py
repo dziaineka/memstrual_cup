@@ -69,6 +69,32 @@ url_regexp = re.compile(regexps.WEB_URL_REGEX)
 logger = setup_logging()
 
 
+async def manage_post_sending(state, chat_id, user_id, seconds):
+    if seconds < 0:
+        await bot.send_message(chat_id,
+                               'Это время уже прошло, введи другое.')
+        return
+    elif seconds > 0:
+        post_time = scheduler.get_str_datetime_in_future(seconds)
+
+        post_date_message = 'Будет отправлено ' + post_time + '.'
+
+        await bot.send_message(chat_id,
+                               post_date_message)
+
+    async with state.proxy() as data:
+        await deliverer.append(
+            post_time=scheduler.get_datetime_in_future(seconds),
+            chat_id=chat_id,
+            message_id=data['message_to_schedule_id'],
+            user_id=user_id)
+
+        data['message_to_schedule_id'] = None
+
+    # вернем рабочий режим
+    await Form.operational_mode.set()
+
+
 @dp.message_handler(commands=['start'])
 async def cmd_start(message: types.Message):
     """
@@ -256,6 +282,12 @@ async def callback_inline(call, state: FSMContext):
         post_date = scheduler.get_today_date(1)
     elif call.data == "послезавтра":
         post_date = scheduler.get_today_date(2)
+    elif call.data == "сейчас":
+        await manage_post_sending(state,
+                                  call.message.chat.id,
+                                  call.message.chat.id,
+                                  seconds=0)
+        return
 
     data = await state.get_data()
     post_date = scheduler.date_to_str(post_date)
@@ -314,30 +346,10 @@ async def process_postdate(message: types.Message, state: FSMContext):
             await process_text(message, state)
             return
 
-        if seconds < 0:
-            await bot.send_message(message.chat.id,
-                                   'Это время уже прошло, введи другое.')
-            return
-        elif seconds > 0:
-            post_time = scheduler.get_str_datetime_in_future(seconds)
-
-            post_date_message = 'Будет отправлено ' + post_time + '.'
-
-            await bot.send_message(message.chat.id,
-                                   post_date_message)
-
-        await deliverer.append(
-            post_time=scheduler.get_datetime_in_future(seconds),
-            chat_id=message.chat.id,
-            message_id=data['message_to_schedule_id'],
-            user_id=message.from_user.id)
-
-        data = await state.get_data()
-        data['message_to_schedule_id'] = None
-        await state.update_data(data=data, message_to_schedule_id=None)
-
-        # вернем рабочий режим
-        await Form.operational_mode.set()
+        await manage_post_sending(state,
+                                  message.chat.id,
+                                  message.from_user.id,
+                                  seconds)
 
 
 @dp.message_handler(state=Form.datetime_input,
