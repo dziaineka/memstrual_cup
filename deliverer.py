@@ -158,18 +158,18 @@ class Deliverer:
 
         state = self._dp.current_state(chat=message.chat.id,
                                        user=message.from_user.id)
-        data = await state.get_data()
 
-        vk_token = None
-        group_id = None
-        channel_tg = None
+        async with state.proxy() as data:
+            vk_token = None
+            group_id = None
+            channel_tg = None
 
-        if ('vk_token' in data) and ('group_id' in data):
-            vk_token = data['vk_token'].strip()
-            group_id = data['group_id'].strip()
+            if ('vk_token' in data) and ('group_id' in data):
+                vk_token = data['vk_token'].strip()
+                group_id = data['group_id'].strip()
 
-        if 'channel_tg' in data:
-            channel_tg = data['channel_tg'].strip()
+            if 'channel_tg' in data:
+                channel_tg = data['channel_tg'].strip()
 
         try:
             url, caption = await self.parse_message(message)
@@ -225,15 +225,14 @@ class Deliverer:
                 state = self._dp.current_state(chat=message.chat.id,
                                                user=message.from_user.id)
 
-                data = await state.get_data()
+                async with state.proxy() as data:
+                    vk_token = None
 
-                vk_token = None
+                    warning = 'Нужно подключиться к вк, ' +\
+                        'чтобы забирать оттуда картинки.'
 
-                warning = 'Нужно подключиться к вк, ' +\
-                    'чтобы забирать оттуда картинки.'
-
-                if 'vk_token' in data:
-                    vk_token = data['vk_token'].strip()
+                    if 'vk_token' in data:
+                        vk_token = data['vk_token'].strip()
 
                 if self.vk_wall_url.match(urls_with_captions[0]):
                     if not vk_token:

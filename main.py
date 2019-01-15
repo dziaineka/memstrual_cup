@@ -5,7 +5,7 @@ import traceback
 
 import aiohttp
 from aiogram import Bot, Dispatcher, types
-from aiogram.contrib.fsm_storage.redis import RedisStorage
+from aiogram.contrib.fsm_storage.redis import RedisStorage2
 from aiogram.dispatcher import FSMContext
 from aiogram.utils import executor, exceptions
 from aiogram.utils.markdown import text
@@ -54,9 +54,9 @@ loop = asyncio.get_event_loop()
 
 bot = Bot(token=config.API_TOKEN, loop=loop)
 
-storage = RedisStorage(host=config.REDIS_HOST,
-                       port=config.REDIS_PORT,
-                       password=config.REDIS_PASSWORD)
+storage = RedisStorage2(host=config.REDIS_HOST,
+                        port=config.REDIS_PORT,
+                        password=config.REDIS_PASSWORD)
 
 dp = Dispatcher(bot, storage=storage)
 vk = VKM()
@@ -206,9 +206,8 @@ async def process_channel(message: types.Message, state: FSMContext):
         await bot.send_message(message.chat.id, 'Нет @ в начале имени.')
         return
 
-    data = await state.get_data()
-    data['channel_tg'] = channel_tg
-    await state.update_data(data=data, channel_tg=channel_tg)
+    async with state.proxy() as data:
+        data['channel_tg'] = channel_tg
 
     await bot.send_message(message.chat.id, 'Можно попробовать слать мемы.')
     await Form.operational_mode.set()
@@ -223,9 +222,8 @@ async def process_token(message: types.Message, state: FSMContext):
 
     vk_token = message.text
 
-    data = await state.get_data()
-    data['vk_token'] = vk_token
-    await state.update_data(data=data, vk_token=vk_token)
+    async with state.proxy() as data:
+        data['vk_token'] = vk_token
 
     test_result, test_message = await vk.test_token(vk_token)
 
@@ -247,13 +245,9 @@ async def process_group_id(message: types.Message, state: FSMContext):
 
     group_id = message.text
 
-    data = await state.get_data()
-    data['group_id'] = group_id
-    await state.update_data(data=data, group_id=group_id)
-
-    data = await state.get_data()
-
-    vk_token = data['vk_token']
+    async with state.proxy() as data:
+        data['group_id'] = group_id
+        vk_token = data['vk_token']
 
     test_result, test_message = await vk.test_group_id(group_id, vk_token)
 
@@ -289,10 +283,10 @@ async def callback_inline(call, state: FSMContext):
                                   seconds=0)
         return
 
-    data = await state.get_data()
     post_date = scheduler.date_to_str(post_date)
-    data['post_date'] = post_date
-    await state.update_data(data=data, post_date=post_date)
+
+    async with state.proxy() as data:
+        data['post_date'] = post_date
 
     keyboard = scheduler.get_day_selection(call.data)
 
@@ -306,11 +300,10 @@ async def callback_inline(call, state: FSMContext):
         keyboard = scheduler.get_day_selection()
 
         post_date = scheduler.get_today_date()
-
-        data = await state.get_data()
         post_date = scheduler.date_to_str(post_date)
-        data['post_date'] = post_date
-        await state.update_data(data=data, post_date=post_date)
+
+        async with state.proxy() as data:
+            data['post_date'] = post_date
 
         await bot.edit_message_reply_markup(
             chat_id=call.message.chat.id,
@@ -326,17 +319,16 @@ async def process_postdate(message: types.Message, state: FSMContext):
     # Если в сообщении есть ссылка, то это очевидно новый псто, забей на старый
     if url_regexp.split(message.text)[1:]:
         # очистим на всякий пожарный поле для отлаживаемого поста
-        data = await state.get_data()
-        data['message_to_schedule_id'] = None
-        await state.update_data(data=data, message_to_schedule_id=None)
+        async with state.proxy() as data:
+            data['message_to_schedule_id'] = None
 
         # и вызовем обработчик ссылок
         await process_text(message, state)
         return
     else:
         # если ссылки нет, то будем парсить время на куда отложить
-        data = await state.get_data()
-        post_date = scheduler.str_to_date(data['post_date'])
+        async with state.proxy() as data:
+            post_date = scheduler.str_to_date(data['post_date'])
 
         try:
             seconds = scheduler.parse_time_input(post_date, message.text)
