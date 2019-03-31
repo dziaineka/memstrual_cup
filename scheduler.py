@@ -127,12 +127,17 @@ class Scheduler:
 
         dtime = Scheduler.get_current_datetime()
 
-        dtime = dtime.replace(year=int(datestr[0]))
-        dtime = dtime.replace(month=int(datestr[1]))
-        dtime = dtime.replace(day=int(datestr[2]))
-        dtime = dtime.replace(hour=int(datestr[3]))
-        dtime = dtime.replace(minute=int(datestr[4]))
+        # костыль чтобы не было ValueError: day is out of range for month
+        # и подобных установим максимально ёмкий месяц и год
+        dtime = dtime.replace(month=int(1))
+        dtime = dtime.replace(year=int(2016))
+
         dtime = dtime.replace(second=int(datestr[5]))
+        dtime = dtime.replace(minute=int(datestr[4]))
+        dtime = dtime.replace(hour=int(datestr[3]))
+        dtime = dtime.replace(day=int(datestr[2]))
+        dtime = dtime.replace(month=int(datestr[1]))
+        dtime = dtime.replace(year=int(datestr[0]))
 
         return dtime
 
