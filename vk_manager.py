@@ -48,7 +48,7 @@ class VKM:
     async def test_token(self, token):
         params = (
             ('access_token', token),
-            ('version', '5.78'),
+            ('v', '5.78'),
         )
 
         url = 'https://api.vk.com/method/account.getProfileInfo'
@@ -73,7 +73,7 @@ class VKM:
         params = (
             ('access_token', token),
             ('group_ids', group_id),
-            ('version', '5.78'),
+            ('v', '5.78'),
         )
 
         url = 'https://api.vk.com/method/groups.getById'
@@ -131,7 +131,7 @@ class VKM:
             'link': url,
             'group_id': group_id,
             'access_token': user_token,
-            'version': '5.78'
+            'v': '5.78'
         }
 
         method_url = 'https://api.vk.com/method/video.save'
@@ -190,7 +190,7 @@ class VKM:
         # получаем адрес сервера для заливания фото
         params = {'group_id': group_id,
                   'access_token': user_token,
-                  'version': '5.78'}
+                  'v': '5.78'}
 
         url = 'https://api.vk.com/method/photos.getWallUploadServer'
 
@@ -237,7 +237,7 @@ class VKM:
             ('message', message),
             ('attachments', attachments),
             ('access_token', user_token),
-            ('version', '5.78'),
+            ('v', '5.78'),
         )
 
         url = 'https://api.vk.com/method/wall.post'
@@ -261,7 +261,7 @@ class VKM:
             params = (
                 ('posts', '-' + pic_id),
                 ('access_token', user_token),
-                ('version', '5.78'),
+                ('v', '5.78'),
             )
 
             response, status = await self.request_get(api_url, params)
@@ -305,7 +305,7 @@ class VKM:
         params = (
             ('photos', '-' + pic_id),
             ('access_token', user_token),
-            ('version', '5.78'),
+            ('v', '5.78'),
         )
 
         response, status = await self.request_get(api_url, params)
