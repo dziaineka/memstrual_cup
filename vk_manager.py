@@ -48,7 +48,7 @@ class VKM:
     async def test_token(self, token):
         params = (
             ('access_token', token),
-            ('v', '5.78'),
+            ('v', '5.95'),
         )
 
         url = 'https://api.vk.com/method/account.getProfileInfo'
@@ -73,7 +73,7 @@ class VKM:
         params = (
             ('access_token', token),
             ('group_ids', group_id),
-            ('v', '5.78'),
+            ('v', '5.95'),
         )
 
         url = 'https://api.vk.com/method/groups.getById'
@@ -131,7 +131,7 @@ class VKM:
             'link': url,
             'group_id': group_id,
             'access_token': user_token,
-            'v': '5.78'
+            'v': '5.95'
         }
 
         method_url = 'https://api.vk.com/method/video.save'
@@ -151,7 +151,11 @@ class VKM:
         except KeyError:
             return response['error_msg']
 
-    async def post_image_from_url(self, user_token, group_id, url, caption=''):
+    async def post_image_from_url(self,
+                                  user_token,
+                                  group_id,
+                                  url,
+                                  caption=''):
             # Загружаем фотку на диск
         filepath, extension = self.get_filepath(url)
 
@@ -171,14 +175,21 @@ class VKM:
                                           filepath,
                                           caption)
 
-    async def post_images(self, user_token, group_id, image_paths, caption=''):
+    async def post_images(self,
+                          user_token,
+                          group_id,
+                          image_paths,
+                          caption=''):
         # Сначала нужно загрузть фотку на сервера ВК
         photos = await self.upload_images_to_wall(user_token,
                                                   group_id,
                                                   image_paths)
 
         # Потом получить её ID
-        attachments = ','.join([str(photo['id']) for photo in photos])
+        attachments = ','.join([
+            'photo'+str(photo['owner_id'])+'_'+str(photo['id'])
+            for photo in photos
+        ])
 
         # И запостить на стену группы
         return await self.post_to_wall(user_token,
@@ -190,7 +201,7 @@ class VKM:
         # получаем адрес сервера для заливания фото
         params = {'group_id': group_id,
                   'access_token': user_token,
-                  'v': '5.78'}
+                  'v': '5.95'}
 
         url = 'https://api.vk.com/method/photos.getWallUploadServer'
 
@@ -237,7 +248,7 @@ class VKM:
             ('message', message),
             ('attachments', attachments),
             ('access_token', user_token),
-            ('v', '5.78'),
+            ('v', '5.95'),
         )
 
         url = 'https://api.vk.com/method/wall.post'
@@ -261,7 +272,7 @@ class VKM:
             params = (
                 ('posts', '-' + pic_id),
                 ('access_token', user_token),
-                ('v', '5.78'),
+                ('v', '5.95'),
             )
 
             response, status = await self.request_get(api_url, params)
@@ -305,7 +316,7 @@ class VKM:
         params = (
             ('photos', '-' + pic_id),
             ('access_token', user_token),
-            ('v', '5.78'),
+            ('v', '5.95'),
         )
 
         response, status = await self.request_get(api_url, params)
