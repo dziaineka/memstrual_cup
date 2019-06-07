@@ -178,7 +178,7 @@ class VKM:
                                                   image_paths)
 
         # Потом получить её ID
-        attachments = ','.join([photo['id'] for photo in photos])
+        attachments = ','.join([str(photo['id']) for photo in photos])
 
         # И запостить на стену группы
         return await self.post_to_wall(user_token,
