@@ -279,7 +279,7 @@ class VKM:
 
             try:
                 post = response['response'][0]['attachment']['photo']
-                new_url = self.get_biggest_size_link(post)
+                new_url = self.get_biggest_size_link(post['sizes'])
             except KeyError:
                 new_url = url
 
@@ -288,21 +288,16 @@ class VKM:
             return url
 
     @staticmethod
-    def get_biggest_size_link(vk_post):
-        if 'src_xxxbig' in vk_post:
-            return vk_post['src_xxxbig']
-        elif 'src_xxbig' in vk_post:
-            return vk_post['src_xxbig']
-        elif 'src_xbig' in vk_post:
-            return vk_post['src_xbig']
-        elif 'src_big' in vk_post:
-            return vk_post['src_big']
-        elif 'src' in vk_post:
-            return vk_post['src']
-        elif 'src_small' in vk_post:
-            return vk_post['src_small']
-        else:
-            raise KeyError
+    def get_biggest_size_link(vk_post_sizes):
+        height = 0
+        url = ''
+
+        for size in vk_post_sizes:
+            if height < size['height']:
+                height = size['height']
+                url = size['url']
+
+        return url
 
     async def check_photo_post(self, user_token, url):
         url_splited = self.vk_photo_url.search(url)
@@ -323,7 +318,7 @@ class VKM:
 
         try:
             post = response['response'][0]
-            new_url = self.get_biggest_size_link(post)
+            new_url = self.get_biggest_size_link(post['sizes'])
         except KeyError:
             return url
 
