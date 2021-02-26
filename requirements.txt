@@ -1,5 +1,5 @@
 aiogram==2.1
-aiohttp==3.5.4
+aiohttp==3.7.4
 aioredis==1.2.0
 astroid==2.2.5
 async-timeout==3.0.1
