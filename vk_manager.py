@@ -5,6 +5,8 @@ import tempfile
 import urllib
 from os import path
 
+import aiohttp
+
 import regexps
 from files_opener import FilesOpener
 
@@ -25,24 +27,26 @@ class VKM:
                                           "coub.com",
                                           "rutube.ru"]
 
-        self.http_session = None
         self.vk_wall_url = re.compile(regexps.VK_WALL_URL, re.IGNORECASE)
         self.vk_photo_url = re.compile(regexps.VK_PHOTO_URL, re.IGNORECASE)
 
     async def request_get(self, url, params):
-        async with self.http_session.get(url, params=params) as resp:
-            status = resp.status
+        async with aiohttp.ClientSession() as http_session:
+            async with http_session.get(url, params=params) as resp:
+                status = resp.status
 
-            try:
-                response = await resp.json(content_type=None)
-            except json.decoder.JSONDecodeError:
-                logger.warning('Опять результат реквеста не смог в json')
-                response = None
+                try:
+                    response = await resp.json(content_type=None)
+                except json.decoder.JSONDecodeError:
+                    logger.warning('Опять результат реквеста не смог в json')
+                    response = None
 
-            return response, status
+                return response, status
 
     async def request_post(self, url, data):
-        resp = await self.http_session.post(url, data=data)
+        async with aiohttp.ClientSession() as http_session:
+            resp = await http_session.post(url, data=data)
+
         return await resp.json(content_type=None)
 
     async def test_token(self, token):
@@ -54,6 +58,9 @@ class VKM:
         url = 'https://api.vk.com/method/account.getProfileInfo'
 
         response, status = await self.request_get(url, params)
+
+        if not response:
+            return False, "Непонятно что произошло"
 
         try:
             account_info = response['response']
@@ -79,6 +86,9 @@ class VKM:
         url = 'https://api.vk.com/method/groups.getById'
 
         response, status = await self.request_get(url, params)
+
+        if not response:
+            return False, "Непонятно что произошло"
 
         group_info = response['response'][0]
         name = group_info['name']
@@ -137,6 +147,9 @@ class VKM:
         method_url = 'https://api.vk.com/method/video.save'
         response, status = await self.request_get(method_url, params)
 
+        if not response:
+            return "Error while saving video"
+
         try:
             url = response['response']['upload_url']
         except KeyError:
@@ -156,7 +169,7 @@ class VKM:
                                   group_id,
                                   url,
                                   caption=''):
-            # Загружаем фотку на диск
+        # Загружаем фотку на диск
         filepath, extension = self.get_filepath(url)
 
         # Проверка расширения после скачивания
@@ -206,6 +219,10 @@ class VKM:
         url = 'https://api.vk.com/method/photos.getWallUploadServer'
 
         response, status = await self.request_get(url, params)
+
+        if not response:
+            raise Exception("Не смогли в getWallUploadServer")
+
         upload_server = response['response']['upload_url']
 
         # подготавливаем и заливаем фото
@@ -219,6 +236,10 @@ class VKM:
         url = 'https://api.vk.com/method/photos.saveWallPhoto'
 
         response, status = await self.request_get(url, params)
+
+        if not response:
+            raise Exception("Не смогли в getWallUploadServer")
+
         return response['response']
 
     @staticmethod
@@ -260,10 +281,14 @@ class VKM:
         elif status == 414:
             return 'Слишком большая длина текста для постинга в ВК. ВК лох.'
         else:
-            return ('Что-то пошло не так, код ошибки - ' + status)
+            return ('Что-то пошло не так, код ошибки - ' + str(status))
 
     async def check_wall_post(self, user_token, url):
         url_splited = self.vk_wall_url.search(url)
+
+        if not url_splited:
+            return url
+
         pic_id = url_splited.group('id')
 
         if pic_id:
@@ -276,6 +301,9 @@ class VKM:
             )
 
             response, status = await self.request_get(api_url, params)
+
+            if not response:
+                return url
 
             try:
                 post = response['response'][0]['attachment']['photo']
@@ -301,11 +329,11 @@ class VKM:
 
     async def check_photo_post(self, user_token, url):
         url_splited = self.vk_photo_url.search(url)
-        pic_id = url_splited.group('id')
 
-        if not pic_id:
+        if not url_splited:
             return url
 
+        pic_id = url_splited.group('id')
         api_url = 'https://api.vk.com/method/photos.getById'
 
         params = (
@@ -315,6 +343,9 @@ class VKM:
         )
 
         response, status = await self.request_get(api_url, params)
+
+        if not response:
+            return url
 
         try:
             post = response['response'][0]

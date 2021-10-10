@@ -218,7 +218,8 @@ class Deliverer:
 
             if matches:
                 urls_with_captions = list(
-                    zip(*[matches[i::2] for i in range(2)]))[0]
+                    zip(*[matches[i::2] for i in range(2)])
+                )[0]
 
                 # тут посмотреть не скормили ли нам ссылку на псто вк,
                 # оттуда надо утянуть картинку

@@ -20,10 +20,6 @@ from vk_manager import VKM
 from exceptions import NoTimeInStringException
 
 
-# TODO
-# отправка гифок
-
-
 def setup_logging():
     # create logger
     logger = logging.getLogger('memstrual_log')
@@ -267,9 +263,6 @@ async def process_group_id(message: types.Message, state: FSMContext):
 async def callback_inline(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки дня публикации.')
 
-    # state = dp.current_state(chat=call.message.chat.id,
-    #                          user=call.from_user.id)
-
     if call.data == "сегодня":
         post_date = scheduler.get_today_date()
     elif call.data == "завтра":
@@ -282,6 +275,8 @@ async def callback_inline(call, state: FSMContext):
                                   call.message.chat.id,
                                   seconds=0)
         return
+    else:
+        post_date = scheduler.get_today_date()
 
     post_date = scheduler.date_to_str(post_date)
 
@@ -363,7 +358,9 @@ async def process_photos(message: types.Message, state: FSMContext):
         await scheduler.schedule_post(state, message)
 
     except Exception:
-        traceback.print_exc(file=config.LOG_PATH)
+        with open(config.LOG_PATH, "a") as logfile:
+            traceback.print_exc(file=logfile)
+
         traceback.print_exc()
         await log_manager.panic_sending()
 
@@ -377,7 +374,9 @@ async def process_text(message: types.Message, state: FSMContext):
         await scheduler.schedule_post(state, message)
 
     except Exception:
-        traceback.print_exc(file=config.LOG_PATH)
+        with open(config.LOG_PATH, "a") as logfile:
+            traceback.print_exc(file=logfile)
+
         traceback.print_exc()
         await log_manager.panic_sending()
 
@@ -413,7 +412,6 @@ async def checking_log_after_pause():
 
 async def startup(dispatcher: Dispatcher):
     logger.info('Старт бота.')
-    vk.http_session = aiohttp.ClientSession()
 
     # запускаем проверку очереди сразу, все необходимое у нас есть
     asyncio.run_coroutine_threadsafe(checking_queue_after_pause(), loop)
@@ -424,10 +422,8 @@ async def startup(dispatcher: Dispatcher):
 
 async def shutdown(dispatcher: Dispatcher):
     logger.info('Убиваем бота.')
-
     await dispatcher.storage.close()
     await dispatcher.storage.wait_closed()
-    await vk.http_session.close()
 
 
 if __name__ == '__main__':
