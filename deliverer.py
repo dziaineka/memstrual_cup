@@ -217,9 +217,9 @@ class Deliverer:
             matches = self.url_regexp.split(message.text)[1:]
 
             if matches:
-                urls_with_captions = list(
-                    zip(*[matches[i::2] for i in range(2)])
-                )[0]
+                matched_url: str = matches[0].strip()
+                matched_caption: str = matches[1].strip()
+                url_with_caption = (matched_url, matched_caption)
 
                 # тут посмотреть не скормили ли нам ссылку на псто вк,
                 # оттуда надо утянуть картинку
@@ -235,31 +235,29 @@ class Deliverer:
                     if 'vk_token' in data:
                         vk_token = data['vk_token'].strip()
 
-                if self.vk_wall_url.match(urls_with_captions[0]):
+                if self.vk_wall_url.match(url_with_caption[0]):
                     if not vk_token:
                         await self._bot.send_message(message.chat.id, warning)
-                        return urls_with_captions[0], message.text
+                        return url_with_caption[0], message.text
 
                     pic_url = await self._vk.check_wall_post(
                         vk_token,
-                        urls_with_captions[0])
+                        url_with_caption[0])
 
-                elif self.vk_photo_url.match(urls_with_captions[0]):
+                elif self.vk_photo_url.match(url_with_caption[0]):
                     if not vk_token:
                         await self._bot.send_message(message.chat.id, warning)
-                        return urls_with_captions[0], message.text
+                        return url_with_caption[0], message.text
 
                     pic_url = await self._vk.check_photo_post(
                         vk_token,
-                        urls_with_captions[0])
+                        url_with_caption[0])
 
                 else:
-                    return urls_with_captions[0], message.text
+                    return url_with_caption[0], message.text
 
-                urls_with_captions = (
-                    pic_url, urls_with_captions[1])
-
-                return urls_with_captions
+                url_with_caption = (pic_url, url_with_caption[1])
+                return url_with_caption
 
         return '', message.text
 
