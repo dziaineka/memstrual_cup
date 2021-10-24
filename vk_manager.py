@@ -3,6 +3,8 @@ import logging
 import re
 import tempfile
 import urllib
+import urllib.request
+import urllib.parse
 from os import path
 
 import aiohttp
