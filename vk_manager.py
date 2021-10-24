@@ -69,12 +69,17 @@ class VKM:
 
             greeting = 'Привет, ' + first_name + ' ' + last_name + '!'
         except KeyError:
-            return False, response.text
+            return False, self.try_to_extract_error(response)
 
         if first_name or last_name:
             return True, greeting
         else:
             return False, response.text
+
+    def try_to_extract_error(self, response: dict):
+        return response \
+            .get("error", {}) \
+            .get("error_msg", "ХЗ какая ошибка от ВК")
 
     async def test_group_id(self, group_id, token):
         params = (
