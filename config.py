@@ -1,14 +1,23 @@
-API_TOKEN = 'PUT_TOKEN_HERE'
+from os import getenv
+from os.path import join, dirname
+from dotenv import load_dotenv
 
-VK_TOKEN_LINK = 'YOU_SHOULD_CREATE_VK_APP_AND_GET_LINK_FROM_IT_TO_GET_TOKEN'
+# Create .env file path.
+dotenv_path = join(dirname(__file__), ".env")
 
-REDIS_HOST = 'PUT_HOST_HERE'
-REDIS_PORT = 00000
-REDIS_PASSWORD = 'PUT_PASSWORD_HERE'
+# Load file from the path.
+load_dotenv(dotenv_path)
 
-QUEUE_ID = 1
+# telegram bot token. Get it here https://t.me/BotFather
+API_TOKEN = getenv("API_TOKEN", "")
+
+VK_TOKEN_LINK = getenv("VK_TOKEN_LINK", "")
+
+REDIS_HOST = getenv("REDIS_HOST", "")
+REDIS_PORT = int(getenv("REDIS_PORT", ""))
+REDIS_PASSWORD = getenv("REDIS_PASSWORD", "")
 
 URL_BASE = 'https://api.telegram.org/file/bot' + API_TOKEN + '/'
 LOG_PATH = '/tmp/memstrual.log'
 
-ADMIN_ID = 00000000
+ADMIN_ID = int(getenv("ADMIN_ID", ""))
