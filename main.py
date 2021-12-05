@@ -3,21 +3,20 @@ import logging
 import re
 import traceback
 
-import aiohttp
 from aiogram import Bot, Dispatcher, types
 from aiogram.contrib.fsm_storage.redis import RedisStorage2
 from aiogram.dispatcher import FSMContext
-from aiogram.utils import executor, exceptions
+from aiogram.utils import exceptions, executor
 from aiogram.utils.markdown import text
 
 import config
 import regexps
 from deliverer import Deliverer
+from exceptions import NoTimeInStringException
 from logManager import LogManager
 from scheduler import Scheduler
 from states import Form
 from vk_manager import VKM
-from exceptions import NoTimeInStringException
 
 
 def setup_logging():

@@ -1,14 +1,18 @@
+from datetime import datetime
 import logging
 import re
 import traceback
 from asyncio import sleep
+from typing import Optional
 
 import config
 import regexps
 from files_opener import FilesOpener
 from scheduler import Scheduler
+from storage import Storage
 
 logger = logging.getLogger('memstrual_log')
+QUEUE_NAME = "post_queue"
 
 
 class Deliverer:
@@ -19,8 +23,7 @@ class Deliverer:
         self._dp = dp
         self._vk = vk
 
-        self._post_queue = self._dp.current_state(chat=self._bot.id,
-                                                  user=self._bot.id)
+        self._post_queue = Storage("post_queue")
 
         self.__checking_running = False
 
@@ -48,51 +51,29 @@ class Deliverer:
         return (dtime - Scheduler.get_current_datetime()).total_seconds()
 
     async def append(self,
-                     post_time,
-                     chat_id,
-                     message_id,
-                     user_id,
+                     post_time: datetime,
+                     chat_id: int,
+                     message_id: int,
+                     user_id: int,
                      silent=False):
         logger.info('Добавляем пост в очередь.')
 
-        post_time = Scheduler.datetime_to_str(post_time)
+        unix_time = post_time.timestamp()
+        str_post_time = Scheduler.datetime_to_str(post_time)
 
-        post = {'post_time': post_time,
+        post = {'post_time': str_post_time,
                 'chat_id': chat_id,
                 'message_id': message_id,
                 'user_id': user_id}
 
-        queue = await self._post_queue.get_data()
-
-        try:
-            queue = queue['post_queue']
-        except KeyError:
-            queue = []
-
-        queue.append(post)
-        queue.sort(key=self.sort_by_nearest_time)
-        queue.reverse()
-
-        await self._post_queue.set_data({'post_queue': queue})
+        await self._post_queue.add_in_sorted_set(QUEUE_NAME, post, unix_time)
 
         if not silent:
             await self.start_checking()
 
-    async def pop(self):
+    async def pop(self) -> Optional[dict]:
         logger.info('Достаем пост из очереди.')
-
-        queue = await self._post_queue.get_data()
-
-        try:
-            queue = queue['post_queue']
-        except KeyError:
-            queue = []
-
-        post = queue.pop()
-
-        await self._post_queue.set_data({'post_queue': queue})
-
-        return post
+        return await self._post_queue.pop_min_from_sorted_set(QUEUE_NAME)
 
     @staticmethod
     def its_time_to_post(cur_time, post_time):
@@ -100,13 +81,13 @@ class Deliverer:
 
     async def check_queue(self):
         logger.info('Проверяем очередь, мб уже есть что постить.')
+        nearest_post = await self.pop()
 
-        try:
-            nearest_post = await self.pop()
-            post_dtime = Scheduler.str_to_datetime(nearest_post['post_time'])
-        except IndexError:
+        if nearest_post is None:
             logger.info('Походу очередь пуста.')
             return self.STATUS_EMPTY
+
+        post_dtime = Scheduler.str_to_datetime(nearest_post['post_time'])
 
         if self.its_time_to_post(Scheduler.get_current_datetime(),
                                  post_dtime):
