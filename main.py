@@ -1,4 +1,5 @@
 import asyncio
+from datetime import date
 import logging
 import re
 import traceback
@@ -277,7 +278,7 @@ async def callback_inline(call, state: FSMContext):
     else:
         post_date = scheduler.get_today_date()
 
-    post_date = scheduler.date_to_str(post_date)
+    post_date = date.isoformat(post_date)
 
     async with state.proxy() as data:
         data['post_date'] = post_date
@@ -294,7 +295,7 @@ async def callback_inline(call, state: FSMContext):
         keyboard = scheduler.get_day_selection()
 
         post_date = scheduler.get_today_date()
-        post_date = scheduler.date_to_str(post_date)
+        post_date = date.isoformat(post_date)
 
         async with state.proxy() as data:
             data['post_date'] = post_date
@@ -322,7 +323,7 @@ async def process_postdate(message: types.Message, state: FSMContext):
     else:
         # если ссылки нет, то будем парсить время на куда отложить
         async with state.proxy() as data:
-            post_date = scheduler.str_to_date(data['post_date'])
+            post_date = date.fromisoformat(data['post_date'])
 
         try:
             seconds = scheduler.parse_time_input(post_date, message.text)

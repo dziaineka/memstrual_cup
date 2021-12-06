@@ -44,12 +44,6 @@ class Deliverer:
 
         return Deliverer.__instance
 
-    @staticmethod
-    def sort_by_nearest_time(post):
-        dtime = Scheduler.str_to_datetime(post['post_time'])
-
-        return (dtime - Scheduler.get_current_datetime()).total_seconds()
-
     async def append(self,
                      post_time: datetime,
                      chat_id: int,
@@ -59,7 +53,7 @@ class Deliverer:
         logger.info('Добавляем пост в очередь.')
 
         unix_time = post_time.timestamp()
-        str_post_time = Scheduler.datetime_to_str(post_time)
+        str_post_time = post_time.isoformat()
 
         post = {'post_time': str_post_time,
                 'chat_id': chat_id,
@@ -87,7 +81,7 @@ class Deliverer:
             logger.info('Походу очередь пуста.')
             return self.STATUS_EMPTY
 
-        post_dtime = Scheduler.str_to_datetime(nearest_post['post_time'])
+        post_dtime = datetime.fromisoformat(nearest_post['post_time'])
 
         if self.its_time_to_post(Scheduler.get_current_datetime(),
                                  post_dtime):

@@ -1,5 +1,5 @@
 import re
-from datetime import datetime, date, timedelta
+from datetime import datetime as dt, date, timedelta
 
 import pytz
 from aiogram import types
@@ -26,7 +26,7 @@ class Scheduler:
         # Update user's state
         await state.set_state(Form.datetime_input)
 
-        post_date = self.date_to_str(self.get_today_date())
+        post_date = date.isoformat(self.get_today_date())
 
         async with state.proxy() as data:
             data['post_date'] = post_date
@@ -110,62 +110,14 @@ class Scheduler:
         return self.secs_to_posttime(datetime_in_future)
 
     @staticmethod
-    def datetime_to_str(dtime):
-        year = int(dtime.year)
-        month = int(dtime.month)
-        day = int(dtime.day)
-        hour = int(dtime.hour)
-        minute = int(dtime.minute)
-        second = int(dtime.second)
-
-        return (str(year) + '/' + str(month) + '/' + str(day) + '/' +
-                str(hour) + '/' + str(minute) + '/' + str(second))
-
-    @staticmethod
-    def str_to_datetime(str_datetime):
-        datestr = str_datetime.split('/')
-
-        dtime = Scheduler.get_current_datetime()
-
-        # костыль чтобы не было ValueError: day is out of range for month
-        # и подобных установим максимально ёмкий месяц и год
-        dtime = dtime.replace(month=int(1))
-        dtime = dtime.replace(year=int(2016))
-
-        dtime = dtime.replace(second=int(datestr[5]))
-        dtime = dtime.replace(minute=int(datestr[4]))
-        dtime = dtime.replace(hour=int(datestr[3]))
-        dtime = dtime.replace(day=int(datestr[2]))
-        dtime = dtime.replace(month=int(datestr[1]))
-        dtime = dtime.replace(year=int(datestr[0]))
-
-        return dtime
-
-    @staticmethod
-    def date_to_str(date):
-        year = int(date.year)
-        month = int(date.month)
-        day = int(date.day)
-
-        return str(year) + '/' + str(month) + '/' + str(day)
-
-    @staticmethod
-    def str_to_date(str_date):
-        datestr = str_date.split('/')
-        return datetime.strptime(datestr[0].rjust(4, '0') +
-                                 datestr[1].rjust(2, '0') +
-                                 datestr[2].rjust(2, '0'),
-                                 "%Y%m%d").date()
-
-    @staticmethod
-    def get_today_date(shift_days=0):
+    def get_today_date(shift_days: int = 0):
         tz_minsk = pytz.timezone('Europe/Minsk')
-        return datetime.now(tz_minsk).date() + timedelta(days=shift_days)
+        return dt.now(tz_minsk).date() + timedelta(days=shift_days)
 
     @staticmethod
     def get_current_datetime(shift_days=0):
         tz_minsk = pytz.timezone('Europe/Minsk')
-        return datetime.now(tz_minsk) + timedelta(days=shift_days)
+        return dt.now(tz_minsk) + timedelta(days=shift_days)
 
     @staticmethod
     def get_day_selection(day_type=''):
