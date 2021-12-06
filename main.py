@@ -13,7 +13,7 @@ import config
 import regexps
 from deliverer import Deliverer
 from exceptions import NoTimeInStringException
-from logManager import LogManager
+from log_manager import LogManager
 from scheduler import Scheduler
 from states import Form
 from vk_manager import VKM
