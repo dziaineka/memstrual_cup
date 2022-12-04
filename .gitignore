@@ -109,3 +109,6 @@ venv.bak/
 
 # Temp
 tmp
+
+# fly.io config file
+fly.toml
